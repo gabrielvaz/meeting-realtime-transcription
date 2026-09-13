@@ -1,0 +1,257 @@
+/**
+ * Smoke test ponta a ponta da tradução ao vivo.
+ *
+ * Sobe um Chrome headless, substitui `getUserMedia` por uma MediaStream gerada
+ * com WebAudio a partir de `scripts/source-speech.wav` (14,9 s de fala em
+ * inglês, do cookbook oficial da OpenAI) e roda o fluxo real contra a API.
+ *
+ * Por que não o flag do Chrome: `--use-file-for-fake-audio-capture` é ignorado
+ * no Chrome for Testing 152 — o dispositivo falso entrega silêncio. A injeção
+ * por WebAudio passa pelo mesmo caminho do app (uma MediaStreamTrack real
+ * adicionada às peer connections), então o que é exercitado é o código de
+ * produção, não um atalho.
+ *
+ * Uso:
+ *   npm i -D puppeteer-core
+ *   APP_URL=http://localhost:3000 node scripts/smoke-test.mjs
+ */
+import puppeteer from "puppeteer-core";
+import fs from "node:fs";
+import path from "node:path";
+
+const CHROME =
+  process.env.CHROME_PATH ??
+  `${process.env.HOME}/.cache/puppeteer/chrome/mac_arm-152.0.7977.75/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing`;
+const APP_URL = process.env.APP_URL ?? "http://localhost:3000";
+const OUT = process.env.OUT ?? ".smoke";
+const SPEECH = path.join(import.meta.dirname, "source-speech.wav");
+
+fs.mkdirSync(OUT, { recursive: true });
+const speechDataUrl = `data:audio/wav;base64,${fs.readFileSync(SPEECH).toString("base64")}`;
+
+const browser = await puppeteer.launch({
+  executablePath: CHROME,
+  headless: !process.env.HEADFUL,
+  args: [
+    "--use-fake-ui-for-media-stream",
+    "--use-fake-device-for-media-stream",
+    "--autoplay-policy=no-user-gesture-required",
+    "--window-size=1600,1000",
+  ],
+  defaultViewport: { width: 1600, height: 1000 },
+});
+
+const page = await browser.newPage();
+
+await page.evaluateOnNewDocument((audioSrc) => {
+  window.__probe = { gum: 0, peers: [], audios: [] };
+
+  navigator.mediaDevices.getUserMedia = async () => {
+    window.__probe.gum += 1;
+    const ctx = new AudioContext({ sampleRate: 48000 });
+    const el = new Audio(audioSrc);
+    el.loop = true;
+    const dest = ctx.createMediaStreamDestination();
+    ctx.createMediaElementSource(el).connect(dest);
+    await ctx.resume();
+    await el.play();
+    return dest.stream;
+  };
+
+  const NativePeer = window.RTCPeerConnection;
+  window.RTCPeerConnection = class extends NativePeer {
+    constructor(...args) {
+      super(...args);
+      const record = { closed: false, self: this };
+      window.__probe.peers.push(record);
+      const close = this.close.bind(this);
+      this.close = () => { record.closed = true; return close(); };
+    }
+  };
+
+  const NativeAudio = window.Audio;
+  window.Audio = class extends NativeAudio {
+    constructor(...args) { super(...args); window.__probe.audios.push(this); }
+  };
+}, speechDataUrl);
+
+let readingApplied = null;
+const logs = [];
+page.on("console", (m) => { if (m.text().includes("[translate:")) logs.push(m.text()); });
+page.on("pageerror", (e) => logs.push(`[pageerror] ${e.message}`));
+
+const state = () => page.evaluate(() => ({
+  panels: [...document.querySelectorAll(".panel")].map((p) => ({
+    lang: p.querySelector(".panel-title")?.textContent,
+    status: p.querySelector(".panel-status")?.textContent ?? "",
+    error: p.querySelector(".panel-error")?.textContent ?? "",
+    current: p.querySelector(".caption.is-current")?.textContent ?? "",
+    previous: p.querySelector(".caption.is-previous")?.textContent ?? "",
+  })),
+  source: document.querySelector(".source-text")?.textContent ?? "",
+  gum: window.__probe.gum,
+  peers: window.__probe.peers.length,
+  openPeers: window.__probe.peers.filter((p) => !p.closed).length,
+  peerStates: window.__probe.peers.map((p) => p.self.connectionState),
+  muted: window.__probe.audios.filter((a) => a.srcObject).map((a) => a.muted),
+}));
+
+const click = (text) =>
+  page.evaluate((t) => {
+    [...document.querySelectorAll("button")].find((b) => b.textContent.includes(t))?.click();
+  }, text);
+
+/**
+ * Os menus do Radix respondem a eventos reais de ponteiro, não a `.click()`
+ * sintético — por isso aqui usamos `page.click`, que move o mouse de verdade.
+ */
+const openMenu = async (name) => {
+  await page.click(`[data-menu="${name}"]`);
+  await wait(400);
+};
+
+const closeMenu = async () => {
+  await page.keyboard.press("Escape");
+  await wait(300);
+};
+
+const toggleLanguageInMenu = async (code) => {
+  await openMenu("languages");
+  await page.click(`[data-lang-menu="${code}"]`);
+  await wait(300);
+  await closeMenu();
+};
+
+const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+const step = async (name, fn) => { const r = await fn(); console.log(name.padEnd(22), JSON.stringify(r)); return r; };
+
+await page.goto(APP_URL, { waitUntil: "networkidle2" });
+await page.screenshot({ path: `${OUT}/01-idle.png` });
+
+const idle = await page.evaluate(() => ({
+  title: document.querySelector(".title")?.textContent,
+  background: getComputedStyle(document.body).backgroundColor,
+  font: getComputedStyle(document.body).fontFamily.split(",")[0],
+  languages: [...document.querySelectorAll("[data-lang]")].map((el) =>
+    el.parentElement?.querySelector("label")?.textContent,
+  ),
+  microphone: document.querySelector("#microphone")?.textContent,
+  waveform: !!document.querySelector("canvas[role='img']"),
+  emoji: /\p{Extended_Pictographic}/u.test(document.body.innerText),
+}));
+console.log("idle", JSON.stringify(idle, null, 2));
+
+// "Mostrar transcrição original" já vem ligada por padrão.
+await click("Iniciar");
+await wait(14000);
+await step("1 idioma", state);
+await page.screenshot({ path: `${OUT}/02-um-idioma.png` });
+
+await toggleLanguageInMenu("it");
+await wait(12000);
+await step("+italiano", state);
+await page.screenshot({ path: `${OUT}/03-dois-idiomas.png` });
+
+await page.evaluate(() => {
+  const it = [...document.querySelectorAll(".panel")].find((p) => p.querySelector(".panel-title")?.textContent === "ITALIANO");
+  [...(it?.querySelectorAll("button") ?? [])].find((b) => b.textContent.includes("Ouvir"))?.click();
+});
+await wait(1500);
+await step("ouvir italiano", state);
+
+// Menu de leitura: fonte, tamanho e organização.
+await openMenu("reading");
+await page.click('[aria-label="Aumentar fonte"]');
+await page.click('[aria-label="Aumentar fonte"]');
+await page.click('[data-font="source-serif"]');
+await wait(200);
+await page.click('[data-arrangement="rows"]');
+await wait(200);
+await closeMenu();
+await wait(1200);
+await step("leitura", async () => {
+  return page.evaluate(() => {
+    const grid = document.querySelector(".grid");
+    const caption = document.querySelector(".caption");
+    return {
+      arrangement: grid?.getAttribute("data-arrangement"),
+      fontFamily: getComputedStyle(grid).fontFamily.split(",")[0],
+      captionPx: caption ? getComputedStyle(caption).fontSize : null,
+      scale: grid ? getComputedStyle(grid).getPropertyValue("--caption-scale").trim() : null,
+    };
+  });
+});
+readingApplied = await page.evaluate(() => {
+  const grid = document.querySelector(".grid");
+  return {
+    arrangement: grid?.getAttribute("data-arrangement"),
+    font: getComputedStyle(grid).fontFamily.split(",")[0],
+    scale: getComputedStyle(grid).getPropertyValue("--caption-scale").trim(),
+  };
+});
+await page.screenshot({ path: `${OUT}/04-leitura.png` });
+
+// Pausar e retomar: o texto tem de sobreviver.
+const beforePause = await page.evaluate(() =>
+  [...document.querySelectorAll(".caption")].map((c) => c.textContent).join(" | "),
+);
+await page.click('[data-pause-toggle]');
+await wait(2500);
+const paused = await step("pausado", state);
+const afterPause = await page.evaluate(() =>
+  [...document.querySelectorAll(".caption")].map((c) => c.textContent).join(" | "),
+);
+await page.screenshot({ path: `${OUT}/05-pausado.png` });
+await page.click('[data-pause-toggle]');
+await wait(8000);
+await step("retomado", state);
+
+await toggleLanguageInMenu("it");
+await wait(4000);
+await step("-italiano", state);
+
+await page.setViewport({ width: 414, height: 896, deviceScaleFactor: 2 });
+await wait(5000);
+await page.screenshot({ path: `${OUT}/06-mobile.png` });
+await page.setViewport({ width: 1600, height: 1000 });
+
+// `gum` precisa ser medido AINDA na sessão: ao parar, a tela inicial religa
+// a prévia do microfone e capturar de novo ali é o comportamento correto.
+const liveGum = (await state()).gum;
+await page.click('[data-action="stop"]');
+await wait(2000);
+const stopped = await step("parado", state);
+
+console.log("\nlogs:\n" + logs.join("\n"));
+fs.writeFileSync(`${OUT}/report.json`, JSON.stringify({ idle, stopped, logs }, null, 2));
+
+// O histórico tem de ter guardado a sessão no localStorage.
+const history = await page.evaluate(() => {
+  const raw = window.localStorage.getItem("live-translation:sessions");
+  const sessions = raw ? JSON.parse(raw) : [];
+  return {
+    count: sessions.length,
+    durationMs: sessions[0]?.durationMs ?? 0,
+    languages: sessions[0]?.languages ?? [],
+    sourceSegments: sessions[0]?.source?.length ?? 0,
+  };
+});
+console.log("histórico".padEnd(22), JSON.stringify(history));
+
+const failures = [];
+if (paused.openPeers !== 0) failures.push("pausa não fechou as sessões");
+if (beforePause !== afterPause) failures.push("pausa perdeu o texto da legenda");
+if (history.count < 1) failures.push("sessão não foi gravada no histórico");
+if (readingApplied?.arrangement !== "rows") failures.push("organização não aplicou");
+if (!readingApplied?.font?.includes("Source")) failures.push("troca de fonte não aplicou");
+if (Number(readingApplied?.scale) <= 1) failures.push("aumento de fonte não aplicou");
+if (!history.durationMs) failures.push("histórico sem duração");
+if (idle.languages.length !== 13) failures.push("esperava 13 idiomas de saída");
+if (idle.emoji) failures.push("emoji encontrado no DOM");
+if (!idle.waveform) failures.push("onda de captura ausente");
+if (stopped.openPeers !== 0) failures.push("sobrou RTCPeerConnection aberta após Parar");
+if (liveGum !== 1) failures.push(`getUserMedia chamado ${liveGum} vezes na sessão, esperava 1`);
+
+await browser.close();
+if (failures.length) { console.error("\nFALHAS:\n- " + failures.join("\n- ")); process.exit(1); }
+console.log("\nOK");
