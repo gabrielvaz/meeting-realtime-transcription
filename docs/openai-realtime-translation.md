@@ -370,6 +370,34 @@ legenda junto**, e de forma silenciosa — a conexão continua saudável e nenhu
 erro é emitido. Quem quer só legenda precisa receber o áudio e simplesmente não
 reproduzi-lo.
 
+## 7.2 Nada de prompt, keywords ou glossário — testado
+
+Verificado contra a API em 2026-09-13, tentando todos os lugares plausíveis:
+
+| Parâmetro | Resposta |
+|---|---|
+| `session.audio.input.transcription.prompt` | `400 unknown_parameter` |
+| `session.audio.input.transcription.keywords` | `400 unknown_parameter` |
+| `session.prompt` | `400 unknown_parameter` |
+| `session.instructions` | `400 unknown_parameter` |
+| `session.audio.output.prompt` | `400 unknown_parameter` |
+
+Note o contraste com os modelos de transcrição pura, que aceitam `prompt`,
+`keywords` e `languages`. Em `/v1/realtime/translations` não existe nenhum
+gancho para vocabulário de domínio.
+
+**O que a API aceita** é trocar o modelo de transcrição da origem:
+`gpt-transcribe` e `gpt-4o-transcribe` retornam `200` em
+`audio.input.transcription.model`. Testei os dois contra `gpt-realtime-whisper`
+com o mesmo áudio:
+
+| Modelo | Transcrição de "Cardioline" |
+|---|---|
+| `gpt-realtime-whisper` | "cardioline" (correto, só a caixa) |
+| `gpt-transcribe` | "cardiolimne" (errado) |
+
+A aplicação continua com `gpt-realtime-whisper` — por medição, não por inércia.
+
 ## 8. Ciclo de vida, encerramento e reconexão
 
 - **WebSocket:** enviar `session.close`, **continuar lendo eventos** até receber

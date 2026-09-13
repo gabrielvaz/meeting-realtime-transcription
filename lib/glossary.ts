@@ -44,10 +44,18 @@ export interface GlossaryEntry {
  * legítima do idioma**. "voltar" como variante de Holter destruiria o verbo
  * "voltar"; "eletro" como variante de ECG destruiria uma palavra corrente em
  * português. Variante ambígua faz mais estrago do que o erro que ela conserta.
+ *
+ * Quando a variante colide com uma palavra comum, escreva-a **com maiúscula**:
+ * variante com maiúscula casa com diferenciação de caixa. "Alterna" corrige o
+ * nome que o modelo capitalizou por reconhecê-lo como nome próprio, e deixa o
+ * verbo "alterna" em paz.
  */
 export const DEFAULT_GLOSSARY: GlossaryEntry[] = [
   // Empresas
-  { id: "g_cardioline", term: "Cardioline", variants: ["cardio line", "cardiolaine", "cardio lane", "cardioláine", "cárdio line"] },
+  // "card online" e "cardiolimne" saíram de testes reais, não de suposição.
+  { id: "g_cardioline", term: "Cardioline", variants: ["cardio line", "cardiolaine", "cardio lane", "cardioláine", "cárdio line", "card online", "card on line", "cardio online", "cardiolimne", "cardiolini", "cardiolina", "carta online", "cardiolyne", "cardiolain",
+    // "Cardiolipin" é termo real de bioquímica: só capitalizado.
+    "Cardiolipin", "Cardiolipina"] },
   { id: "g_cardios", term: "Cardios", variants: ["cardius", "cárdios", "cardio's", "cardiós"] },
 
   // Produtos Cardioline
@@ -76,8 +84,22 @@ export const DEFAULT_GLOSSARY: GlossaryEntry[] = [
   { id: "g_hdplus", term: "HD+", variants: ["hd mais", "h d mais", "agá dê mais", "hd plus", "h d plus"] },
 
   // Termos clínicos
-  { id: "g_holter", term: "Holter", variants: ["holder", "rolter", "olter", "holte", "rólter", "ólter"] },
-  { id: "g_ecg", term: "ECG", variants: ["e c g", "e.c.g.", "e-c-g"] },
+  // "router", "hotter" e "roteador" apareceram em teste real com voz humana.
+  // São palavras legítimas em outros contextos — ver a nota no README.
+  // "router", "hotter" e "Alterna" saíram de testes reais. As capitalizadas
+  // só casam capitalizadas — o modelo capitaliza o que entende como nome,
+  // então o verbo "alterna" e o substantivo "alter" ficam intactos.
+  // Holter é o caso difícil: o modelo o troca por uma palavra real diferente a
+  // cada vez (Router, Hotter, Alterna, Oterno — todos de testes reais). As que
+  // são palavras legítimas entram **capitalizadas**, e por isso só casam
+  // capitalizadas: o modelo capitaliza o que entende como nome próprio, então
+  // "o roteador da sala" e "o sistema alterna" ficam intactos.
+  { id: "g_holter", term: "Holter", variants: [
+    "rolter", "olter", "holte", "rólter", "ólter", "hólter", "houlter",
+    "Holder", "Router", "Hotter", "Rooter", "Roteador", "Alterna", "Alter",
+    "Ater", "Oter", "Oterno",
+  ] },
+  { id: "g_ecg", term: "ECG", variants: ["e c g", "e.c.g.", "e-c-g", "acg", "a c g", "ace ge", "ecgê"] },
   { id: "g_spirometria", term: "espirometria", variants: ["expirometria", "spirometria", "esperometria"] },
 
   // Negócio
@@ -188,10 +210,15 @@ const ACCENT_GROUPS: Record<string, string> = {
   n: "nñ",
 };
 
-function foldChar(char: string): string {
+function foldChar(char: string, caseSensitive = false): string {
   const lower = char.toLowerCase();
   const group = ACCENT_GROUPS[lower];
-  return group ? `[${group}${group.toUpperCase()}]` : escapeRegex(char);
+  if (!group) return escapeRegex(char);
+  // Numa variante sensível à caixa, só as formas acentuadas da mesma caixa.
+  if (caseSensitive) {
+    return char === lower ? `[${group}]` : `[${group.toUpperCase()}]`;
+  }
+  return `[${group}${group.toUpperCase()}]`;
 }
 
 function escapeRegex(value: string): string {
@@ -202,11 +229,11 @@ function escapeRegex(value: string): string {
  * Uma variante vira um padrão tolerante a acento e a espaçamento: "e c g"
  * também casa "e  c  g", e "cardio line" casa "cardio-line".
  */
-function variantToPattern(variant: string): string {
+function variantToPattern(variant: string, caseSensitive = false): string {
   return variant
     .trim()
     .split(/\s+/)
-    .map((word) => [...word].map(foldChar).join(""))
+    .map((word) => [...word].map((char) => foldChar(char, caseSensitive)).join(""))
     .join("[\\s\\-]+");
 }
 
@@ -222,6 +249,24 @@ export function compileGlossary(entries: readonly GlossaryEntry[]): CompiledGlos
     const term = entry.term.trim();
     if (!term) continue;
 
+    /**
+     * O próprio termo vira regra, para normalizar a caixa: "cardioline" e
+     * "CardioLine" viram "Cardioline" sem precisar listar cada variação.
+     *
+     * Exceto quando a forma correta é toda minúscula — aí a regra
+     * transformaria "Espirometria" no começo de uma frase em "espirometria",
+     * quebrando a capitalização.
+     */
+    if (term !== term.toLowerCase()) {
+      rules.push({
+        pattern: new RegExp(
+          `(?<![\\p{L}\\p{N}])${variantToPattern(term)}(?![\\p{L}\\p{N}])`,
+          "giu",
+        ),
+        replacement: term,
+      });
+    }
+
     // Variantes mais longas primeiro: senão "ecg" consome o começo de "ecg-12".
     const variants = [...entry.variants]
       .map((variant) => variant.trim())
@@ -231,10 +276,23 @@ export function compileGlossary(entries: readonly GlossaryEntry[]): CompiledGlos
     for (const variant of variants) {
       // Uma variante idêntica ao termo correto só geraria trabalho à toa.
       if (variant.toLowerCase() === term.toLowerCase()) continue;
+
+      /**
+       * Variante com maiúscula casa respeitando a caixa; variante toda
+       * minúscula casa em qualquer caixa.
+       *
+       * É o que torna seguro corrigir um erro que também é palavra comum: o
+       * modelo capitaliza o que entende como nome próprio, então "Alterna"
+       * distingue o nome mal ouvido do verbo "alterna".
+       */
+      const caseSensitive = variant !== variant.toLowerCase();
       rules.push({
         // `\b` não funciona quando a variante começa ou termina em pontuação,
         // então usamos lookaround por caractere de palavra.
-        pattern: new RegExp(`(?<![\\p{L}\\p{N}])${variantToPattern(variant)}(?![\\p{L}\\p{N}])`, "giu"),
+        pattern: new RegExp(
+          `(?<![\\p{L}\\p{N}])${variantToPattern(variant, caseSensitive)}(?![\\p{L}\\p{N}])`,
+          caseSensitive ? "gu" : "giu",
+        ),
         replacement: term,
       });
     }

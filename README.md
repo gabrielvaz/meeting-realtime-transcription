@@ -303,7 +303,27 @@ A correção vale para a **transcrição original e para todas as traduções**,
 pode ser editada durante a reunião — é falando que se descobre que um termo está
 saindo errado. O campo *Testar* mostra o resultado antes de você depender dele.
 
-Três decisões que fazem isso funcionar de verdade:
+### Quando o dicionário resolve e quando não
+
+Testei com voz real e com voz sintética, várias vezes a mesma frase. O resultado
+separa dois casos:
+
+| Termo | Comportamento do modelo | Dicionário resolve? |
+|---|---|---|
+| Cardioline, ECG | erra às vezes, e **de forma repetida** (`Card Online`, `cardiolimne`, `ACG`) | **Sim.** Medido: 8 a 11 ocorrências corretas por sessão, zero formas erradas restantes. |
+| Holter | erra quase sempre, e **de forma diferente a cada vez** | **Parcialmente.** |
+
+O que "Holter" virou em quatro execuções da mesma frase: `Router`, `Hotter`,
+`Alterna`, `Alter`, `Ater`, `Oterno`, `Alten`, `Euter`, `O-termin`, `ter`. Não é
+uma lista que dê para prever — e cada variante arriscada acrescentada machuca
+texto correto.
+
+Por isso existe a **correção rápida**: durante a reunião, selecione a palavra
+errada na legenda e uma barra aparece oferecendo mapeá-la para o termo certo. Um
+clique, e aquele erro está corrigido dali em diante e nas próximas sessões. É a
+resposta honesta a um problema que não tem solução preditiva.
+
+### Três decisões que fazem isso funcionar de verdade:
 
 - **A correção roda sobre o texto acumulado, nunca sobre o delta isolado.**
   "Cardioline" chega partido em vários fragmentos; casar em cima de um fragmento
@@ -315,20 +335,26 @@ Três decisões que fazem isso funcionar de verdade:
   [`scripts/glossary-test.mjs`](scripts/glossary-test.mjs), porque é o erro que
   uma substituição ingênua introduz e que ninguém percebe até aparecer no meio
   de uma reunião.
-- **Variante não pode ser palavra legítima.** Eu tinha posto `voltar` como
-  variante de Holter e `eletro` como variante de ECG; as duas destruiriam texto
-  correto ("vamos voltar ao assunto" → "vamos Holter ao assunto") e foram
-  removidas. O teste tem casos negativos justamente para isso.
+- **Variante não pode ser palavra legítima — a não ser capitalizada.** Eu tinha
+  posto `voltar` como variante de Holter e `eletro` como variante de ECG; as duas
+  destruiriam texto correto e foram removidas.
 
-O único trade-off assumido é `holder` → Holter: é palavra inglesa legítima, mas
-de longe o erro mais comum numa reunião em português. Quem conduz reuniões em
-inglês deve remover essa variante.
+  Para os casos em que o erro *é* uma palavra comum (`router`, `hotter`,
+  `holder`, `alterna`, `roteador`), existe um mecanismo: **variante escrita com
+  maiúscula casa respeitando a caixa**. O modelo capitaliza o que entende como
+  nome próprio, então `Router` corrige o nome mal ouvido e `o router do
+  escritório` fica intacto. Variante toda minúscula continua casando em qualquer
+  caixa.
+- **A forma correta do termo é regra por si só.** Qualquer caixa de "cardioline"
+  ou "CardioLine" vira "Cardioline", sem listar variação nenhuma — exceto quando
+  a forma canônica é toda minúscula, senão "Espirometria" no começo de frase
+  perderia a maiúscula.
 
 O limite honesto: isso corrige **forma escrita**. Se o modelo entendeu outra
 coisa e traduziu a frase inteira errado, trocar uma palavra não conserta.
 
 ```bash
-npm run test:glossary   # 31 casos, incluindo os negativos
+npm run test:glossary   # 47 casos, incluindo os negativos
 ```
 
 ## Chave do usuário
@@ -414,6 +440,7 @@ components/
   TranscriptHistory.tsx          modal: histórico, copiar, salvar, apagar
   ConfirmDialog.tsx              confirmação de toda ação destrutiva
   GlossaryEditor.tsx             editor do dicionário, com campo de teste
+  QuickCorrect.tsx               corrigir um termo selecionando-o na legenda
   TranslationDisplay.tsx         grid responsivo + transcrição original
   TranslationPanel.tsx           uma região de legenda + controles de áudio
   ui/                            componentes do shadcn (gerados pela CLI)

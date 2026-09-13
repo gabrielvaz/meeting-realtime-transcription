@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CAPTURE_LABEL, type CaptureState } from "@/components/AudioWaveform";
 import { LanguageSelector } from "@/components/LanguageSelector";
 import { MicrophoneSelector } from "@/components/MicrophoneSelector";
+import { QuickCorrect } from "@/components/QuickCorrect";
 import { SessionControls } from "@/components/SessionControls";
 import { SettingsDialog } from "@/components/SettingsDialog";
 import { TranscriptHistory } from "@/components/TranscriptHistory";
@@ -222,6 +223,9 @@ export default function Page() {
           paused={paused}
           preferences={preferences}
         />
+
+        {/* Selecionar a palavra errada na legenda corrige o termo na hora. */}
+        <QuickCorrect glossary={glossary} onChange={updateGlossary} />
       </div>
     );
   }

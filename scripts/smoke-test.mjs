@@ -248,6 +248,30 @@ const captionStyle = await page.evaluate(() => {
 });
 console.log("estilo da legenda".padEnd(22), JSON.stringify(captionStyle));
 
+// Correção rápida: selecionar uma palavra na legenda abre a barra de correção.
+const quickCorrect = await page.evaluate(() => {
+  const caption = document.querySelector(".stage .caption");
+  const node = caption?.firstChild;
+  if (!node || !node.textContent || node.textContent.length < 6) return false;
+  const range = document.createRange();
+  range.setStart(node, 0);
+  range.setEnd(node, 5);
+  const selection = window.getSelection();
+  selection.removeAllRanges();
+  selection.addRange(range);
+  document.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
+  return true;
+});
+await wait(500);
+const quickBarVisible = await page.evaluate(() => {
+  const visible = !!document.querySelector("[data-quick-correct]");
+  window.getSelection()?.removeAllRanges();
+  document.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
+  return visible;
+});
+console.log("correção rápida".padEnd(22), JSON.stringify({ selecionou: quickCorrect, barra: quickBarVisible }));
+await wait(300);
+
 // O dicionário precisa ter alcançado o texto renderizado.
 const glossaryApplied = await page.evaluate(() =>
   [...document.querySelectorAll(".caption")].some((c) =>
@@ -292,6 +316,7 @@ if (captionStyle.past && captionStyle.past === captionStyle.current) {
 }
 if (captionStyle.distanceFromBottom > 4) failures.push("legenda não rolou até o fim");
 if (!glossaryApplied) failures.push("dicionário não chegou à legenda");
+if (quickCorrect && !quickBarVisible) failures.push("barra de correção rápida não apareceu");
 if (!readingApplied?.font?.includes("Source")) failures.push("troca de fonte não aplicou");
 if (Number(readingApplied?.scale) <= 1) failures.push("aumento de fonte não aplicou");
 if (!history.durationMs) failures.push("histórico sem duração");

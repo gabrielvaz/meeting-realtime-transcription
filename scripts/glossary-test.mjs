@@ -37,7 +37,7 @@ const cases = [
   { input: "O modelo hd mais tem mais canais.", expect: "HD+" },
 
   // Clínicos
-  { input: "O exame de holder ficou bom.", expect: "Holter" },
+  { input: "O exame de Holder ficou bom.", expect: "Holter" },
   { input: "O e c g mostrou alteração.", expect: "ECG" },
   { input: "Fizemos a expirometria também.", expect: "espirometria" },
 
@@ -47,8 +47,22 @@ const cases = [
   { input: "O i c p mudou depois da pesquisa.", expect: "ICP" },
   { input: "É um negócio b two b.", expect: "B2B" },
 
-  // Normalização de caixa
-  { input: "Relatório do HOLDER anexado.", expect: "Holter" },
+  // Erros observados em teste real, com voz humana e com TTS
+  { input: "O nome Router não deve ser traduzido.", expect: "Holter" },
+  { input: "the name Hotter shouldn't be translated", expect: "Holter" },
+  { input: "Relatório do Holder anexado.", expect: "Holter" },
+  { input: "presentazione della Card Online", expect: "Cardioline" },
+  { input: "una apresentação da cardiolimne", expect: "Cardioline" },
+  { input: "os nomes ACG e outras coisas", expect: "ECG" },
+  { input: "o nome Alterna não deve ser traduzido", expect: "Holter" },
+  { input: "il nome Alterna non deve essere tradotto", expect: "Holter" },
+
+  // Normalização de caixa: a forma correta do termo é regra por si só
+  { input: "apresentação da cardioline hoje", expect: "Cardioline" },
+  { input: "This name, CardioLine, shouldn't change.", expect: "Cardioline" },
+  { input: "o cardiolight novo", expect: "CardioLight" },
+  { input: "rodamos no CUBESTRESS", expect: "CubeStress" },
+
   { input: "cardio-line é a marca", expect: "Cardioline" },
   { input: "O cárdios com acento também casa.", expect: "Cardios" },
 
@@ -60,11 +74,17 @@ const cases = [
   { input: "Preciso do eletro de ontem.", expect: "eletro" },
   { input: "O Holter já está certo.", expect: "Holter" },
   { input: "A espirometria já estava escrita certo.", expect: "espirometria" },
+  // Termo canônico minúsculo não pode perder a maiúscula de início de frase.
+  { input: "Espirometria é o exame complementar.", expect: "Espirometria" },
+  // Variante capitalizada não pode pegar a palavra comum em minúscula.
+  { input: "O sistema alterna entre os canais.", expect: "alterna" },
+  { input: "O roteador da sala caiu.", expect: "roteador" },
 
-  // Trade-off assumido, não acerto: "holder" é palavra inglesa legítima, mas
-  // é de longe o erro mais comum para "Holter" numa reunião em português.
-  // Quem conduz reuniões em inglês deve remover essa variante.
-  { input: "Ele é o holder do contrato.", expect: "Holter", tradeoff: true },
+  // Palavras legítimas em minúscula ficam intactas: a variante correspondente
+  // é capitalizada, e o modelo capitaliza o que entende como nome próprio.
+  { input: "Ele é o holder do contrato.", expect: "holder" },
+  { input: "It is getting hotter in here.", expect: "hotter" },
+  { input: "Configure o router do escritório.", expect: "router" },
 ];
 
 let failures = 0;
