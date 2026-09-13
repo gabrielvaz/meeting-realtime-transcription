@@ -57,6 +57,29 @@ o texto novo parar de aparecer. Agora só gesto do usuário (`wheel`,
 `touchmove`, `keydown`) desancora, e o teste verifica
 `scrollHeight - scrollTop - clientHeight ≈ 0`.
 
+### Reancorar a legenda quando o painel muda de tamanho
+
+Trocar a organização do grid, o tamanho da fonte ou reexibir um idioma altera a
+altura do painel. O conteúdo fica onde estava e o fim sai da vista — até chegar
+o próximo delta, o que num silêncio demora e parece que a legenda travou. Um
+`ResizeObserver` no corpo do painel reancora quando ele muda de tamanho, desde
+que o usuário não tenha rolado para cima de propósito.
+
+Isso só apareceu depois que a legenda passou a medir pelo contêiner
+(`container-type` + `cqi`): com `vw`, o tamanho não dependia do painel e o
+defeito ficava mascarado. O teste mede
+`scrollHeight - scrollTop - clientHeight` depois de uma sequência que muda
+organização, fonte, tamanho e quantidade de idiomas — exatamente o caminho que
+expõe o problema.
+
+### Uma regressão que o teste pegou no mesmo dia
+
+Ao reescrever o bloco de legendas do CSS para introduzir as unidades de
+contêiner, a substituição engoliu as regras de cor e trecho antigo ficou com a
+mesma cor do atual. O teste compara `getComputedStyle().color` dos dois e
+falhou na hora. É a segunda vez que essa asserção pega exatamente esse erro —
+num screenshot os dois parecem pretos.
+
 ### Sobre clicar em componentes Radix
 
 Os menus do shadcn respondem a eventos reais de ponteiro, não a `element.click()`
