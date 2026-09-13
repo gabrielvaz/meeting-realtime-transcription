@@ -3,8 +3,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { CAPTURE_LABEL, type CaptureState } from "@/components/AudioWaveform";
+import { DeckPicker } from "@/components/DeckPicker";
 import { LanguageSelector } from "@/components/LanguageSelector";
 import { MicrophoneSelector } from "@/components/MicrophoneSelector";
+import { PresentationStage } from "@/components/PresentationStage";
 import { QuickCorrect } from "@/components/QuickCorrect";
 import { SessionControls } from "@/components/SessionControls";
 import { SettingsDialog } from "@/components/SettingsDialog";
@@ -16,6 +18,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { readApiKey } from "@/lib/apiKey";
+import { readDeckFile, type Deck } from "@/lib/deck";
 import {
   DEFAULT_GLOSSARY,
   loadGlossary,
@@ -59,6 +62,9 @@ export default function Page() {
   const [hasLocalKey, setHasLocalKey] = useState(false);
   const [hasServerKey, setHasServerKey] = useState<boolean | null>(null);
   const [glossary, setGlossary] = useState<GlossaryEntry[]>(DEFAULT_GLOSSARY);
+  /** O HTML dos slides vive só em memória: nunca vai para disco nem para rede. */
+  const [deck, setDeck] = useState<Deck | null>(null);
+  const deckInputRef = useRef<HTMLInputElement>(null);
 
   const microphone = useMicrophone();
   const translation = useRealtimeTranslation({
@@ -68,6 +74,8 @@ export default function Page() {
 
   const isLive = translation.runState !== "idle";
   const paused = translation.runState === "paused";
+  // Sem slides carregados o modo apresentação não tem o que apresentar.
+  const presenting = preferences.mode === "presentation" && deck !== null;
 
   // Preferências de leitura ficam no localStorage: quem projeta numa TV não
   // quer reconfigurar fonte e tamanho toda reunião.
@@ -207,7 +215,9 @@ export default function Page() {
           preferences={preferences}
           glossary={glossary}
           stream={microphone.stream}
+          presenting={presenting}
           onGlossaryChange={updateGlossary}
+          onChangeDeck={() => deckInputRef.current?.click()}
           onToggleLanguage={handleToggleLanguage}
           onToggleOriginal={(value) => updatePreferences({ showOriginal: value })}
           onPreferences={updatePreferences}
@@ -216,16 +226,45 @@ export default function Page() {
           onStop={handleStop}
         />
 
-        <TranslationDisplay
-          tracks={orderedTracks}
-          sourceSubtitle={translation.sourceSubtitle}
-          sourceActive={translation.sourceActive}
-          paused={paused}
-          preferences={preferences}
-        />
+        {presenting && deck ? (
+          <PresentationStage
+            deck={deck}
+            tracks={orderedTracks}
+            sourceSubtitle={translation.sourceSubtitle}
+            sourceActive={translation.sourceActive}
+            paused={paused}
+            preferences={preferences}
+          />
+        ) : (
+          <TranslationDisplay
+            tracks={orderedTracks}
+            sourceSubtitle={translation.sourceSubtitle}
+            sourceActive={translation.sourceActive}
+            paused={paused}
+            preferences={preferences}
+          />
+        )}
 
         {/* Selecionar a palavra errada na legenda corrige o termo na hora. */}
         <QuickCorrect glossary={glossary} onChange={updateGlossary} />
+
+        {/* Trocar os slides sem parar a tradução. */}
+        <input
+          ref={deckInputRef}
+          type="file"
+          accept=".html,.htm,.xhtml,text/html"
+          className="hidden"
+          onChange={async (event) => {
+            const file = event.target.files?.[0];
+            if (!file) return;
+            try {
+              setDeck(await readDeckFile(file));
+            } catch {
+              /* erro de leitura já é reportado na tela inicial */
+            }
+            event.target.value = "";
+          }}
+        />
       </div>
     );
   }
@@ -234,6 +273,7 @@ export default function Page() {
   // `null` enquanto a checagem do servidor não voltou: não bloqueamos por
   // suspeita, só por certeza.
   const missingKey = !hasLocalKey && hasServerKey === false;
+  const missingDeck = preferences.mode === "presentation" && !deck;
 
   return (
     <div className="app flex min-h-dvh flex-col">
@@ -262,6 +302,39 @@ export default function Page() {
             />
           </div>
         </div>
+
+        <div className="flex flex-col gap-2.5">
+          <span className="text-xs font-medium uppercase tracking-[0.1em] text-muted-foreground">
+            Modo
+          </span>
+          <div className="flex gap-2">
+            {(
+              [
+                ["captions", "Legendas", "As traduções ocupam a tela inteira."],
+                ["presentation", "Apresentação", "Seus slides, com as legendas numa faixa."],
+              ] as const
+            ).map(([value, label, hint]) => (
+              <button
+                key={value}
+                type="button"
+                data-mode={value}
+                onClick={() => updatePreferences({ mode: value })}
+                className={`flex-1 rounded-sm border px-4 py-3 text-left transition-colors ${
+                  preferences.mode === value
+                    ? "border-foreground"
+                    : "border-border text-muted-foreground hover:border-muted-foreground"
+                }`}
+              >
+                <span className="block text-sm">{label}</span>
+                <span className="block text-[13px] text-muted-foreground">{hint}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {preferences.mode === "presentation" ? (
+          <DeckPicker deck={deck} onDeck={setDeck} />
+        ) : null}
 
         <MicrophoneSelector
           devices={microphone.devices}
@@ -333,10 +406,16 @@ export default function Page() {
           onClick={handleStart}
           // `starting` já impede clique duplo. Não amarramos o botão ao estado
           // da prévia: uma prévia pendurada não pode impedir de traduzir.
-          disabled={starting || missingKey}
+          disabled={starting || missingKey || missingDeck}
         >
           {starting ? "Conectando…" : "Iniciar tradução"}
         </Button>
+
+        {missingDeck ? (
+          <p className="text-[13px] text-muted-foreground">
+            Escolha o arquivo HTML dos slides para iniciar no modo apresentação.
+          </p>
+        ) : null}
 
         {setupError ? (
           <Alert variant="destructive" role="alert">

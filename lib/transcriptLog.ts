@@ -168,6 +168,10 @@ export interface ReadingPreferences {
   /** Multiplicador aplicado sobre o tamanho base da legenda. */
   scale: number;
   arrangement: "auto" | "columns" | "rows" | "grid";
+  /** Altura da faixa de legendas no modo apresentação. */
+  captionBand: "small" | "medium" | "large";
+  /** Legendas em tela cheia, ou slides com as legendas numa faixa. */
+  mode: "captions" | "presentation";
   showOriginal: boolean;
 }
 
@@ -175,6 +179,8 @@ export const DEFAULT_PREFERENCES: ReadingPreferences = {
   fontId: "inter",
   scale: 1,
   arrangement: "auto",
+  captionBand: "medium",
+  mode: "captions",
   showOriginal: true,
 };
 

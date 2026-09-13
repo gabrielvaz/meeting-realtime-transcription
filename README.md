@@ -272,6 +272,47 @@ aplicação passa a ser acessível por qualquer um. Isso é seguro **porque cada
 visitante usa a própria chave** — não há chave embutida no bundle. Mas qualquer
 pessoa com o link consegue abrir a página.
 
+## Dois modos
+
+**Legendas** — o modo original. As traduções ocupam a tela inteira, para
+projetar numa TV enquanto alguém fala.
+
+**Apresentação** — você envia o HTML dos seus slides, navega neles normalmente,
+e as legendas ficam numa faixa embaixo. A altura da faixa tem três posições no
+menu *Leitura*, e **Tela cheia** expande o app inteiro, não só os slides — as
+legendas precisam continuar visíveis na projeção. Dá para trocar o arquivo no
+meio da sessão pelo botão *Slides*, sem parar a tradução.
+
+### Como o HTML enviado é isolado
+
+Os slides precisam rodar JavaScript, senão não há navegação nem animação. Mas o
+`localStorage` desta aplicação guarda a chave da OpenAI, e um HTML de origem
+desconhecida não pode chegar perto dela.
+
+A solução é um `<iframe srcDoc>` com
+`sandbox="allow-scripts allow-popups allow-forms allow-modals"` e
+**sem `allow-same-origin`**. Essa combinação dá ao documento uma **origem
+opaca**: os scripts rodam, mas ele não lê o `localStorage` da aplicação, não
+alcança o DOM da página e não navega a janela de topo. As duas flags juntas
+(`allow-scripts` + `allow-same-origin`) anulariam o sandbox — é o erro clássico
+aqui, e por isso está escrito no código.
+
+Isso é verificado, não presumido: `scripts/sample-deck.html` tenta ler a chave
+de propósito, e [`scripts/presentation-test.mjs`](scripts/presentation-test.mjs)
+falha se a leitura **não** der `SecurityError`.
+
+```bash
+npm run test:presentation
+```
+
+Resultado atual: `leak: "BLOQUEADO: SecurityError"`, `document.domain: ""`
+(origem opaca), slides navegando de 1 a 3 com as setas, e legenda viva na faixa.
+
+`srcDoc` em vez de blob URL de propósito: sem objeto para criar, revogar ou
+vazar quando o usuário troca de arquivo no meio da apresentação. O arquivo vive
+só em memória — não vai para disco nem para servidor nenhum. Limite de 15 MB,
+que é onde o custo de parse começa a pesar.
+
 ## Dicionário de correção de termos
 
 `gpt-realtime-translate` **não aceita glossário**. A documentação é explícita —
@@ -350,11 +391,20 @@ resposta honesta a um problema que não tem solução preditiva.
   a forma canônica é toda minúscula, senão "Espirometria" no começo de frase
   perderia a maiúscula.
 
+Uma exceção deliberada ao critério: `cardiolipin` e `cardiolipina` são termos
+reais de bioquímica e mesmo assim estão na lista em minúscula, porque num
+contexto Cardioline o modelo os produz com frequência. Se você for discutir o
+fosfolipídio de verdade, remova as duas.
+
 O limite honesto: isso corrige **forma escrita**. Se o modelo entendeu outra
 coisa e traduziu a frase inteira errado, trocar uma palavra não conserta.
 
 ```bash
 npm run test:glossary   # 47 casos, incluindo os negativos
+```
+
+```bash
+npm run test:presentation   # isolamento do iframe + interatividade dos slides
 ```
 
 ## Chave do usuário
@@ -441,6 +491,8 @@ components/
   ConfirmDialog.tsx              confirmação de toda ação destrutiva
   GlossaryEditor.tsx             editor do dicionário, com campo de teste
   QuickCorrect.tsx               corrigir um termo selecionando-o na legenda
+  DeckPicker.tsx                 upload do HTML dos slides
+  PresentationStage.tsx          iframe isolado + faixa de legendas
   TranslationDisplay.tsx         grid responsivo + transcrição original
   TranslationPanel.tsx           uma região de legenda + controles de áudio
   ui/                            componentes do shadcn (gerados pela CLI)
@@ -453,6 +505,7 @@ lib/
   utils.ts                       `cn` do shadcn
   apiKey.ts                      chave do usuário no localStorage
   audioSource.ts                 AudioSource: microphone | display (tab audio)
+  deck.ts                        leitura e validação do HTML de apresentação
   fonts.ts                       as 5 fontes de legenda
   glossary.ts                    dicionário de correção de termos
   languages.ts                   lista oficial + validação

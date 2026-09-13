@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "build:static": "STATIC_EXPORT=1 next build",
-    "test:glossary": "node --experimental-strip-types scripts/glossary-test.mjs"
+    "test:glossary": "node --experimental-strip-types scripts/glossary-test.mjs",
+    "test:presentation": "node scripts/presentation-test.mjs"
   },
   "dependencies": {
     "class-variance-authority": "^0.7.1",

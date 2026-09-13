@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="pt-BR"><head><meta charset="utf-8"><title>Deck de teste</title>
+<style>
+  body{margin:0;font:16px/1.4 system-ui;display:grid;place-items:center;height:100vh}
+  .slide{display:none;text-align:center}.slide.on{display:block}
+  h1{font-size:64px;margin:0}
+</style></head><body>
+<div class="slide on" data-i="1"><h1>Slide 1</h1><p>Use as setas</p></div>
+<div class="slide" data-i="2"><h1>Slide 2</h1></div>
+<div class="slide" data-i="3"><h1>Slide 3</h1></div>
+<script>
+  let i = 0;
+  const slides = [...document.querySelectorAll(".slide")];
+  const show = () => slides.forEach((s, n) => s.classList.toggle("on", n === i));
+  addEventListener("keydown", (e) => {
+    if (e.key === "ArrowRight") { i = Math.min(i + 1, slides.length - 1); show(); }
+    if (e.key === "ArrowLeft") { i = Math.max(i - 1, 0); show(); }
+  });
+  // Tentativa de leitura do storage do app: tem de falhar.
+  try { window.__leak = localStorage.getItem("live-translation:openai-key") ?? "null"; }
+  catch (err) { window.__leak = "BLOQUEADO: " + err.name; }
+  document.title = "deck-ok";
+</script></body></html>

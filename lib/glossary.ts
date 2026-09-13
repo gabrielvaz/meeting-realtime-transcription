@@ -54,8 +54,11 @@ export const DEFAULT_GLOSSARY: GlossaryEntry[] = [
   // Empresas
   // "card online" e "cardiolimne" saíram de testes reais, não de suposição.
   { id: "g_cardioline", term: "Cardioline", variants: ["cardio line", "cardiolaine", "cardio lane", "cardioláine", "cárdio line", "card online", "card on line", "cardio online", "cardiolimne", "cardiolini", "cardiolina", "carta online", "cardiolyne", "cardiolain",
-    // "Cardiolipin" é termo real de bioquímica: só capitalizado.
-    "Cardiolipin", "Cardiolipina"] },
+    // "cardiolipin"/"cardiolipina" são termos reais de bioquímica, e entram
+    // aqui como exceção deliberada ao critério de não usar palavra legítima:
+    // num contexto Cardioline o modelo produz isso com frequência, e o risco
+    // de alguém discutir o fosfolipídio é baixo. Quem for discutir, remove.
+    "Cardiolipin", "Cardiolipina", "cardiolipin", "cardiolipina"] },
   { id: "g_cardios", term: "Cardios", variants: ["cardius", "cárdios", "cardio's", "cardiós"] },
 
   // Produtos Cardioline

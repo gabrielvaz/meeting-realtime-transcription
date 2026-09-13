@@ -23,7 +23,10 @@ interface SessionControlsProps {
   preferences: ReadingPreferences;
   glossary: GlossaryEntry[];
   stream: MediaStream | null;
+  /** Modo apresentação: libera os controles de slides e de tela cheia. */
+  presenting: boolean;
   onGlossaryChange: (entries: GlossaryEntry[]) => void;
+  onChangeDeck: () => void;
   onToggleLanguage: (language: TargetLanguageCode) => void;
   onToggleOriginal: (value: boolean) => void;
   onPreferences: (patch: Partial<ReadingPreferences>) => void;
@@ -42,7 +45,9 @@ export function SessionControls({
   preferences,
   glossary,
   stream,
+  presenting,
   onGlossaryChange,
+  onChangeDeck,
   onToggleLanguage,
   onToggleOriginal,
   onPreferences,
@@ -85,7 +90,38 @@ export function SessionControls({
           onToggleLanguage={onToggleLanguage}
           onToggleOriginal={onToggleOriginal}
         />
-        <ReadingMenu preferences={preferences} onChange={onPreferences} />
+        <ReadingMenu
+          preferences={preferences}
+          onChange={onPreferences}
+          showBandHeight={presenting}
+        />
+        {presenting ? (
+          <>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 text-xs"
+              data-action="deck"
+              onClick={onChangeDeck}
+            >
+              Slides
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 text-xs"
+              data-action="fullscreen"
+              onClick={() => {
+                // A tela cheia vale para o app inteiro, não só para os slides:
+                // as legendas precisam continuar visíveis na projeção.
+                if (document.fullscreenElement) void document.exitFullscreen();
+                else void document.documentElement.requestFullscreen().catch(() => undefined);
+              }}
+            >
+              Tela cheia
+            </Button>
+          </>
+        ) : null}
         {/* Alcançável durante a reunião: é falando que se descobre que um termo
             está saindo errado. A correção passa a valer no texto seguinte. */}
         <SettingsDialog
