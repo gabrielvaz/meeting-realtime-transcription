@@ -44,6 +44,24 @@ export function TranslationPanel({
   }, [track.subtitle.revision]);
 
   /**
+   * Reancora quando o painel muda de tamanho.
+   *
+   * Trocar a organização do grid, o tamanho da fonte ou reexibir um idioma
+   * altera a altura do painel: o conteúdo continua onde estava e o fim sai da
+   * vista, até chegar o próximo delta. Num silêncio, isso pode durar bastante —
+   * e parece que a legenda travou.
+   */
+  useEffect(() => {
+    const node = scrollRef.current;
+    if (!node || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(() => {
+      if (pinnedRef.current) node.scrollTop = node.scrollHeight;
+    });
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, []);
+
+  /**
    * Só gesto do usuário desancora.
    *
    * Escutar `scroll` puro não serve: mudar a organização do grid, o tamanho da

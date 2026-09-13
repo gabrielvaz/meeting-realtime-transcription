@@ -266,6 +266,19 @@ body {
   overflow-wrap: break-word;
 }
 
+/* Só o trecho sendo falado é preto. Tudo o que já fechou vira cinza e
+   continua na tela — o texto nunca some, a área é que rola. */
+.caption.is-current {
+  color: var(--ink);
+}
+
+.caption.is-past {
+  color: var(--ink-soft);
+}
+
+/* Ancorar com `justify-content: flex-end` torna o conteúdo que transborda
+   inalcançável pelo scroll. `margin-top: auto` no primeiro filho não tem esse
+   defeito: encosta embaixo quando cabe, rola normalmente quando não cabe. */
 .panel-body {
   justify-content: flex-start;
 }

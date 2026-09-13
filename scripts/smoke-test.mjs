@@ -248,6 +248,8 @@ const captionStyle = await page.evaluate(() => {
 });
 console.log("estilo da legenda".padEnd(22), JSON.stringify(captionStyle));
 
+// A partir daqui o teste mexe na seleção de texto, o que faz o navegador rolar
+// o painel para revelá-la. Por isso a medição da rolagem fica acima.
 // Correção rápida: selecionar uma palavra na legenda abre a barra de correção.
 const quickCorrect = await page.evaluate(() => {
   const caption = document.querySelector(".stage .caption");
