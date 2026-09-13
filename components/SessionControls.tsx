@@ -3,6 +3,7 @@
 import { AudioWaveform } from "@/components/AudioWaveform";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { LanguageMenu } from "@/components/LanguageMenu";
+import { LayoutMenu } from "@/components/LayoutMenu";
 import { ReadingMenu } from "@/components/ReadingMenu";
 import { SettingsDialog } from "@/components/SettingsDialog";
 import { TranscriptHistory } from "@/components/TranscriptHistory";
@@ -90,11 +91,11 @@ export function SessionControls({
           onToggleLanguage={onToggleLanguage}
           onToggleOriginal={onToggleOriginal}
         />
-        <ReadingMenu
-          preferences={preferences}
-          onChange={onPreferences}
-          showBandHeight={presenting}
-        />
+        {presenting ? (
+          <LayoutMenu preferences={preferences} onChange={onPreferences} />
+        ) : (
+          <ReadingMenu preferences={preferences} onChange={onPreferences} />
+        )}
         {presenting ? (
           <>
             <Button
@@ -126,10 +127,13 @@ export function SessionControls({
             está saindo errado. A correção passa a valer no texto seguinte. */}
         <SettingsDialog
           glossary={glossary}
+          preferences={preferences}
           onGlossaryChange={onGlossaryChange}
+          onPreferencesChange={onPreferences}
+          defaultTab="appearance"
           trigger={
             <Button variant="outline" size="sm" className="h-7 text-xs" data-action="settings">
-              Dicionário
+              Ajustes
             </Button>
           }
         />

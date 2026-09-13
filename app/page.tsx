@@ -18,6 +18,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { readApiKey } from "@/lib/apiKey";
+import { applyTheme } from "@/lib/themes";
 import { readDeckFile, type Deck } from "@/lib/deck";
 import {
   DEFAULT_GLOSSARY,
@@ -115,6 +116,21 @@ export default function Page() {
       return next;
     });
   }, []);
+
+  /**
+   * O tema é aplicado na raiz do documento, não num wrapper: o modal e o
+   * dropdown do shadcn são renderizados em portal, fora da árvore da página.
+   * O script inline em `layout.tsx` já aplicou o salvo antes da primeira
+   * pintura; aqui só acompanhamos as trocas.
+   */
+  useEffect(() => {
+    applyTheme(preferences.theme, document.documentElement);
+    if (preferences.theme !== "system") return;
+    const media = window.matchMedia("(prefers-color-scheme: dark)");
+    const sync = () => applyTheme("system", document.documentElement);
+    media.addEventListener("change", sync);
+    return () => media.removeEventListener("change", sync);
+  }, [preferences.theme]);
 
   /**
    * Se o navegador já tem permissão, liga o microfone antes de iniciar a
@@ -285,7 +301,9 @@ export default function Page() {
           <div className="flex items-center gap-2">
             <SettingsDialog
               glossary={glossary}
+              preferences={preferences}
               onGlossaryChange={updateGlossary}
+              onPreferencesChange={updatePreferences}
               onKeyChange={setHasLocalKey}
               trigger={
                 <Button variant="outline" size="sm" className="h-7 text-xs">
@@ -388,7 +406,9 @@ export default function Page() {
               </span>
               <SettingsDialog
                 glossary={glossary}
+                preferences={preferences}
                 onGlossaryChange={updateGlossary}
+                onPreferencesChange={updatePreferences}
                 onKeyChange={setHasLocalKey}
                 trigger={
                   <Button variant="outline" size="sm" className="h-7 text-xs">

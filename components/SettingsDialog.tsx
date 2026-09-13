@@ -3,6 +3,7 @@
 import { useCallback, useState } from "react";
 
 import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { AppearanceSettings } from "@/components/AppearanceSettings";
 import { GlossaryEditor } from "@/components/GlossaryEditor";
 import { Button } from "@/components/ui/button";
 import {
@@ -18,6 +19,7 @@ import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { GlossaryEntry } from "@/lib/glossary";
+import type { ReadingPreferences } from "@/lib/transcriptLog";
 import { mintClientSecret } from "@/lib/openai/clientSecret";
 import {
   clearApiKey,
@@ -36,15 +38,22 @@ type TestState =
 interface SettingsDialogProps {
   trigger: React.ReactNode;
   glossary: GlossaryEntry[];
+  preferences: ReadingPreferences;
   onGlossaryChange: (entries: GlossaryEntry[]) => void;
+  onPreferencesChange: (patch: Partial<ReadingPreferences>) => void;
   onKeyChange?: (hasKey: boolean) => void;
+  /** Aba aberta ao abrir o modal. */
+  defaultTab?: string;
 }
 
 export function SettingsDialog({
   trigger,
   glossary,
+  preferences,
   onGlossaryChange,
+  onPreferencesChange,
   onKeyChange,
+  defaultTab = "key",
 }: SettingsDialogProps) {
   const [open, setOpen] = useState(false);
   const [savedKey, setSavedKey] = useState<string | null>(null);
@@ -110,14 +119,17 @@ export function SettingsDialog({
             Configurar
           </DialogTitle>
           <DialogDescription>
-            Chave da OpenAI e como esta aplicação funciona.
+            Chave da OpenAI, aparência, dicionário de termos.
           </DialogDescription>
         </DialogHeader>
 
-        <Tabs defaultValue="key" className="gap-0">
+        <Tabs defaultValue={defaultTab} className="gap-0">
           <TabsList className="mx-6 mt-4 w-[calc(100%-3rem)]">
             <TabsTrigger value="key" className="flex-1">
-              Chave da API
+              Chave
+            </TabsTrigger>
+            <TabsTrigger value="appearance" className="flex-1" data-tab="appearance">
+              Aparência
             </TabsTrigger>
             <TabsTrigger value="glossary" className="flex-1" data-tab="glossary">
               Dicionário
@@ -269,6 +281,13 @@ export function SettingsDialog({
                   quando não há chave salva aqui.
                 </p>
               </section>
+            </TabsContent>
+
+            <TabsContent value="appearance" className="m-0 p-6">
+              <AppearanceSettings
+                preferences={preferences}
+                onChange={onPreferencesChange}
+              />
             </TabsContent>
 
             <TabsContent value="glossary" className="m-0 p-6">

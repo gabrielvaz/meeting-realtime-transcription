@@ -283,6 +283,28 @@ menu *Leitura*, e **Tela cheia** expande o app inteiro, não só os slides — a
 legendas precisam continuar visíveis na projeção. Dá para trocar o arquivo no
 meio da sessão pelo botão *Slides*, sem parar a tradução.
 
+### Onde ficam as legendas
+
+Um menu **Layout** na barra, porque é o controle que se mexe no meio da fala —
+o slide muda, o texto atrapalha, você tira da frente:
+
+| Opção | O que faz |
+|---|---|
+| Abaixo dos slides | faixa na parte inferior (padrão) |
+| Acima dos slides | faixa na parte superior |
+| Na lateral direita | coluna ao lado, para slides em retrato |
+| Sobre os slides | sobreposta, com fundo translúcido; os slides ficam em tela cheia |
+| Ocultar | só os slides. **A tradução continua rodando** e indo para o histórico |
+
+No mesmo menu: altura (ou largura, na lateral) em três posições, e a organização
+quando há vários idiomas.
+
+O tamanho do texto é calculado pelo **contêiner**, não pela viewport
+(`container-type: inline-size` + unidades `cqi`). Sem isso a legenda na coluna
+lateral saía com duas palavras por linha, cortadas: era grande demais porque
+media a janela, não o painel que a hospeda. Medido: 36px na faixa de largura
+inteira, 18px na coluna de 512px, sem regra nova para cada caso.
+
 ### Como o HTML enviado é isolado
 
 Os slides precisam rodar JavaScript, senão não há navegação nem animação. Mas o
@@ -312,6 +334,36 @@ Resultado atual: `leak: "BLOQUEADO: SecurityError"`, `document.domain: ""`
 vazar quando o usuário troca de arquivo no meio da apresentação. O arquivo vive
 só em memória — não vai para disco nem para servidor nenhum. Limite de 15 MB,
 que é onde o custo de parse começa a pesar.
+
+## Temas e aparência
+
+Em **Ajustes → Aparência**: tema, fonte das legendas e tamanho do texto, com
+prévia ao vivo. Tudo no `localStorage`.
+
+| Tema | Para quando |
+|---|---|
+| Sistema | acompanha o claro/escuro do computador |
+| Claro | sala iluminada (padrão) |
+| Escuro | luz apagada, projetor ligado |
+| Papel | fundo quente, reunião longa |
+| Alto contraste | preto puro no branco puro, projetor ruim |
+| Âmbar | escuro com texto âmbar, sala às escuras |
+
+Três detalhes que custaram uma correção cada, todos agora travados em teste:
+
+- **Especificidade.** Os blocos de tema usam `:root[data-theme=…]`, não
+  `[data-theme=…]`. O `.dark` do shadcn tem a mesma especificidade e vem depois
+  no arquivo — com o seletor simples, "âmbar" renderizava idêntico a "escuro".
+  O teste compara as cores computadas dos cinco temas e falha se duas forem
+  iguais.
+- **Flash na carga.** Um script inline no `layout.tsx` aplica o tema salvo antes
+  da primeira pintura. Sem ele, quem usa tema escuro vê um lampejo branco a cada
+  carga. O `<html>` leva `suppressHydrationWarning`, porque a diferença entre
+  servidor e cliente é intencional.
+- **O deck no tema escuro.** O iframe recebe fundo branco e `colorScheme: light`
+  fixos. Um deck que não define o próprio fundo herdaria o canvas escuro e
+  ficaria com texto preto sobre preto — e não dá para reestilizá-lo, já que é de
+  outra origem. Deck que define o próprio fundo pinta por cima.
 
 ## Dicionário de correção de termos
 
@@ -404,7 +456,7 @@ npm run test:glossary   # 47 casos, incluindo os negativos
 ```
 
 ```bash
-npm run test:presentation   # isolamento do iframe + interatividade dos slides
+npm run test:presentation   # isolamento do iframe, slides, temas e layouts
 ```
 
 ## Chave do usuário
@@ -492,7 +544,9 @@ components/
   GlossaryEditor.tsx             editor do dicionário, com campo de teste
   QuickCorrect.tsx               corrigir um termo selecionando-o na legenda
   DeckPicker.tsx                 upload do HTML dos slides
-  PresentationStage.tsx          iframe isolado + faixa de legendas
+  PresentationStage.tsx          iframe isolado + os cinco layouts de legenda
+  LayoutMenu.tsx                 posição, tamanho e organização das legendas
+  AppearanceSettings.tsx         tema, fonte e tamanho do texto
   TranslationDisplay.tsx         grid responsivo + transcrição original
   TranslationPanel.tsx           uma região de legenda + controles de áudio
   ui/                            componentes do shadcn (gerados pela CLI)
@@ -507,6 +561,7 @@ lib/
   audioSource.ts                 AudioSource: microphone | display (tab audio)
   deck.ts                        leitura e validação do HTML de apresentação
   fonts.ts                       as 5 fontes de legenda
+  themes.ts                      os 6 temas
   glossary.ts                    dicionário de correção de termos
   languages.ts                   lista oficial + validação
   subtitleBuffer.ts              deltas → trecho atual / anterior

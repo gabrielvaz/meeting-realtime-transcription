@@ -172,6 +172,9 @@ export interface ReadingPreferences {
   captionBand: "small" | "medium" | "large";
   /** Legendas em tela cheia, ou slides com as legendas numa faixa. */
   mode: "captions" | "presentation";
+  /** Onde as legendas ficam em relação aos slides. */
+  captionLayout: "bottom" | "top" | "right" | "overlay" | "hidden";
+  theme: string;
   showOriginal: boolean;
 }
 
@@ -181,6 +184,8 @@ export const DEFAULT_PREFERENCES: ReadingPreferences = {
   arrangement: "auto",
   captionBand: "medium",
   mode: "captions",
+  captionLayout: "bottom",
+  theme: "light",
   showOriginal: true,
 };
 

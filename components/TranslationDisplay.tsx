@@ -36,7 +36,7 @@ export function TranslationDisplay({
   return (
     <main className="stage flex min-h-0 flex-1 flex-col">
       {preferences.showOriginal ? (
-        <section className="flex-none border-b border-border px-5 py-3.5" style={style}>
+        <section className="source flex-none border-b border-border px-5 py-3.5" style={style}>
           <h2 className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/70">
             Original — detecção automática
           </h2>

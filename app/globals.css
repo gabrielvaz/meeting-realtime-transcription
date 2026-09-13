@@ -71,6 +71,132 @@
     "Apple SD Gothic Neo", sans-serif;
 }
 
+/* ------------------------------------------------------------------ */
+/* Temas                                                              */
+/*                                                                    */
+/* Cada tema redefine os tokens do projeto (--ink, --surface, --line)  */
+/* e os do shadcn (--background, --foreground, …) de uma vez só. O     */
+/* atributo é posto na raiz por `applyTheme`, em lib/themes.ts.        */
+/*                                                                    */
+/* O seletor é `:root[data-theme=…]`, e não `[data-theme=…]`, de       */
+/* propósito: o bloco `.dark` do shadcn tem a mesma especificidade e   */
+/* vem depois no arquivo, então venceria. Com `:root` junto, estes     */
+/* blocos ganham — foi assim que "âmbar" deixou de renderizar igual a  */
+/* "escuro".                                                          */
+/* ------------------------------------------------------------------ */
+
+:root[data-theme="dark"] {
+  --ink: #ededed;
+  --ink-soft: #8f8f8f;
+  --ink-faint: #5c5c5c;
+  --line: #262626;
+  --surface: #0d0d0d;
+  --danger: #ff7a7a;
+
+  --background: #0d0d0d;
+  --foreground: #ededed;
+  --card: #141414;
+  --card-foreground: #ededed;
+  --popover: #141414;
+  --popover-foreground: #ededed;
+  --primary: #ededed;
+  --primary-foreground: #0d0d0d;
+  --secondary: #1c1c1c;
+  --secondary-foreground: #ededed;
+  --muted: #1c1c1c;
+  --muted-foreground: #8f8f8f;
+  --accent: #1c1c1c;
+  --accent-foreground: #ededed;
+  --destructive: #ff7a7a;
+  --border: #262626;
+  --input: #262626;
+  --ring: #8f8f8f;
+}
+
+:root[data-theme="paper"] {
+  --ink: #2b2419;
+  --ink-soft: #6b5f4d;
+  --ink-faint: #a0937c;
+  --line: #e2d9c7;
+  --surface: #f6f1e7;
+  --danger: #9b2c2c;
+
+  --background: #f6f1e7;
+  --foreground: #2b2419;
+  --card: #fbf7ef;
+  --card-foreground: #2b2419;
+  --popover: #fbf7ef;
+  --popover-foreground: #2b2419;
+  --primary: #2b2419;
+  --primary-foreground: #f6f1e7;
+  --secondary: #ece4d5;
+  --secondary-foreground: #2b2419;
+  --muted: #ece4d5;
+  --muted-foreground: #6b5f4d;
+  --accent: #ece4d5;
+  --accent-foreground: #2b2419;
+  --destructive: #9b2c2c;
+  --border: #e2d9c7;
+  --input: #e2d9c7;
+  --ring: #6b5f4d;
+}
+
+:root[data-theme="contrast"] {
+  --ink: #000000;
+  --ink-soft: #3a3a3a;
+  --ink-faint: #6b6b6b;
+  --line: #000000;
+  --surface: #ffffff;
+  --danger: #b00000;
+
+  --background: #ffffff;
+  --foreground: #000000;
+  --card: #ffffff;
+  --card-foreground: #000000;
+  --popover: #ffffff;
+  --popover-foreground: #000000;
+  --primary: #000000;
+  --primary-foreground: #ffffff;
+  --secondary: #f0f0f0;
+  --secondary-foreground: #000000;
+  --muted: #f0f0f0;
+  --muted-foreground: #3a3a3a;
+  --accent: #f0f0f0;
+  --accent-foreground: #000000;
+  --destructive: #b00000;
+  --border: #000000;
+  --input: #000000;
+  --ring: #000000;
+}
+
+:root[data-theme="amber"] {
+  --ink: #ffb454;
+  --ink-soft: #a6742f;
+  --ink-faint: #6b4a1d;
+  --line: #2a1f10;
+  --surface: #0b0b0b;
+  --danger: #ff7a7a;
+
+  --background: #0b0b0b;
+  --foreground: #ffb454;
+  --card: #141008;
+  --card-foreground: #ffb454;
+  --popover: #141008;
+  --popover-foreground: #ffb454;
+  --primary: #ffb454;
+  --primary-foreground: #0b0b0b;
+  --secondary: #1c1508;
+  --secondary-foreground: #ffb454;
+  --muted: #1c1508;
+  --muted-foreground: #a6742f;
+  --accent: #1c1508;
+  --accent-foreground: #ffb454;
+  --destructive: #ff7a7a;
+  --border: #2a1f10;
+  --input: #2a1f10;
+  --ring: #a6742f;
+}
+
 html,
 body {
   height: 100%;
@@ -83,21 +209,25 @@ body {
 
 /* Legendas ------------------------------------------------------------ */
 
-/* Uma escala por densidade em vez de uma dúzia de breakpoints. Os limites
-   vêm do uso: precisa ser legível num projetor de sala de reunião. */
+/* A densidade define só as colunas do grid. O tamanho do texto é problema do
+   contêiner, não da viewport — ver `.caption` abaixo. */
 .grid[data-density="one"] {
   grid-template-columns: 1fr;
-  --caption-size: clamp(26px, 4.6vw, 64px);
 }
 
 .grid[data-density="two"] {
   grid-template-columns: 1fr;
-  --caption-size: clamp(24px, 3.4vw, 48px);
 }
 
 .grid[data-density="many"] {
   grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-  --caption-size: clamp(22px, 2.3vw, 36px);
+}
+
+@media (min-width: 1100px) {
+  /* Em widescreen, duas colunas leem melhor que duas faixas baixas. */
+  .grid[data-density="two"] {
+    grid-template-columns: 1fr 1fr;
+  }
 }
 
 /* Organização escolhida pelo usuário. Sobrepõe o padrão da densidade, mas não
@@ -116,30 +246,24 @@ body {
   grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
 }
 
-@media (min-width: 1100px) {
-  /* Em widescreen, duas colunas leem melhor que duas faixas baixas. */
-  .grid[data-density="two"] {
-    grid-template-columns: 1fr 1fr;
-  }
-}
-
-/* Só o trecho sendo falado é preto. Tudo o que já fechou vira cinza e
-   continua na tela — o texto nunca some, a área é que rola. */
-.caption.is-current {
-  color: var(--ink);
-}
-
-.caption.is-past {
-  color: var(--ink-soft);
+/* Cada painel é um contêiner de consulta. É isso que faz a mesma legenda caber
+   numa coluna lateral de 256px e numa tela de projetor de 1600px sem regra
+   nova: o texto acompanha a largura de quem o hospeda, não a da janela. Com
+   `vw`, a legenda na lateral saía com duas palavras por linha, cortadas. */
+.panel,
+.source {
+  container-type: inline-size;
 }
 
 .caption {
   margin: 0;
-  /* O menu de leitura multiplica o tamanho base da densidade. */
-  font-size: calc(var(--caption-size, 32px) * var(--caption-scale, 1));
+  /* O menu de leitura multiplica o tamanho base do contêiner. */
+  font-size: calc(clamp(18px, 5cqi, 56px) * var(--caption-scale, 1));
   line-height: 1.24;
   letter-spacing: -0.015em;
   text-wrap: pretty;
+  /* Numa coluna estreita, "translated" não pode vazar para fora do painel. */
+  overflow-wrap: break-word;
 }
 
 .panel-body {
@@ -150,8 +274,15 @@ body {
   margin-top: auto;
 }
 
+/* Sobreposta aos slides, a legenda precisa de um fundo próprio: texto solto em
+   cima de um slide claro some. */
+[data-caption-overlay] {
+  background: color-mix(in srgb, var(--surface) 88%, transparent);
+  backdrop-filter: blur(6px);
+}
+
 .source-text {
-  font-size: calc(clamp(13px, 1.3vw, 17px) * var(--caption-scale, 1));
+  font-size: calc(clamp(12px, 1.4cqi, 17px) * var(--caption-scale, 1));
 }
 
 @media (max-width: 640px) {

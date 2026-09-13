@@ -52,6 +52,27 @@ await page.evaluateOnNewDocument((audioSrc) => {
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 
 await page.goto(APP_URL, { waitUntil: "networkidle2" });
+
+// --- Temas: cada um precisa ter as próprias cores ---
+await page.click("button::-p-text(Configurar)");
+await wait(500);
+await page.click('[data-tab="appearance"]');
+await wait(400);
+const themes = {};
+for (const id of ["light", "dark", "paper", "contrast", "amber"]) {
+  await page.click(`[data-theme-option="${id}"]`);
+  await wait(220);
+  themes[id] = await page.evaluate(() => {
+    const style = getComputedStyle(document.body);
+    return `${style.backgroundColor} / ${style.color}`;
+  });
+}
+await page.click('[data-theme-option="light"]');
+await wait(200);
+await page.keyboard.press("Escape");
+await wait(400);
+console.log("temas", JSON.stringify(themes, null, 2));
+
 await page.click('[data-mode="presentation"]');
 await wait(300);
 
@@ -84,6 +105,42 @@ const slideAfter = frame
   ? await frame.evaluate(() => document.querySelector(".slide.on")?.dataset.i)
   : null;
 
+// --- Layouts: a geometria tem de mudar de verdade ---
+const layouts = {};
+for (const id of ["bottom", "top", "right", "overlay", "hidden"]) {
+  await page.click('[data-menu="layout"]');
+  await wait(350);
+  await page.click(`[data-layout-option="${id}"]`);
+  await wait(250);
+  await page.keyboard.press("Escape");
+  await wait(450);
+  layouts[id] = await page.evaluate(() => {
+    const rect = (sel) => {
+      const el = document.querySelector(sel);
+      if (!el) return null;
+      const r = el.getBoundingClientRect();
+      return { x: Math.round(r.x), y: Math.round(r.y), w: Math.round(r.width), h: Math.round(r.height) };
+    };
+    return {
+      applied: document.querySelector("main[data-layout]")?.dataset.layout,
+      band: rect("[data-caption-band]"),
+      slides: rect("[data-deck-frame]"),
+      captionPx: (() => {
+        const c = document.querySelector(".caption");
+        return c ? Math.round(parseFloat(getComputedStyle(c).fontSize)) : null;
+      })(),
+    };
+  });
+}
+console.log("layouts", JSON.stringify(layouts, null, 2));
+
+await page.click('[data-menu="layout"]');
+await wait(350);
+await page.click('[data-layout-option="bottom"]');
+await wait(250);
+await page.keyboard.press("Escape");
+await wait(450);
+
 const band = await page.evaluate(() => {
   const el = document.querySelector("[data-caption-band]");
   return {
@@ -108,6 +165,37 @@ if (domain) failures.push(`a origem do deck não é opaca (document.domain = ${d
 if (slideBefore === slideAfter) failures.push("as setas não navegaram os slides");
 if (!band.height) failures.push("faixa de legendas ausente");
 if (!band.text) failures.push("legenda vazia durante a apresentação");
+
+// Cada tema precisa de cores próprias. O bug que isto pega: `.dark` do shadcn
+// tem a mesma especificidade dos blocos de tema e vence por ordem no arquivo,
+// fazendo "âmbar" renderizar idêntico a "escuro".
+const distinctThemes = new Set(Object.values(themes));
+if (distinctThemes.size !== Object.keys(themes).length) {
+  failures.push(`temas com cores repetidas: ${JSON.stringify(themes)}`);
+}
+
+for (const [id, result] of Object.entries(layouts)) {
+  if (result.applied !== id) failures.push(`layout ${id} não foi aplicado`);
+}
+if (layouts.hidden.band) failures.push("layout 'ocultar' deixou a faixa visível");
+if (!layouts.bottom.band || layouts.bottom.band.y <= layouts.bottom.slides.y) {
+  failures.push("layout 'abaixo' não pôs a faixa embaixo");
+}
+if (!layouts.top.band || layouts.top.band.y >= layouts.top.slides.y) {
+  failures.push("layout 'acima' não pôs a faixa em cima");
+}
+if (!layouts.right.band || layouts.right.band.x <= layouts.right.slides.x) {
+  failures.push("layout 'lateral' não pôs a faixa à direita");
+}
+if (layouts.overlay.slides.h <= layouts.bottom.slides.h) {
+  failures.push("layout 'sobre os slides' não deixou os slides em tela cheia");
+}
+// A legenda mede pelo contêiner: na lateral estreita ela precisa encolher.
+if (!(layouts.right.captionPx < layouts.bottom.captionPx)) {
+  failures.push(
+    `legenda não encolheu na lateral (${layouts.right.captionPx}px vs ${layouts.bottom.captionPx}px)`,
+  );
+}
 
 await browser.close();
 if (failures.length) {
