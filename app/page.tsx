@@ -15,6 +15,12 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { readApiKey } from "@/lib/apiKey";
+import {
+  DEFAULT_GLOSSARY,
+  loadGlossary,
+  saveGlossary,
+  type GlossaryEntry,
+} from "@/lib/glossary";
 import { TARGET_LANGUAGES } from "@/lib/languages";
 import {
   DEFAULT_PREFERENCES,
@@ -51,9 +57,13 @@ export default function Page() {
   const [capture, setCapture] = useState<CaptureState>("stopped");
   const [hasLocalKey, setHasLocalKey] = useState(false);
   const [hasServerKey, setHasServerKey] = useState<boolean | null>(null);
+  const [glossary, setGlossary] = useState<GlossaryEntry[]>(DEFAULT_GLOSSARY);
 
   const microphone = useMicrophone();
-  const translation = useRealtimeTranslation({ getStream: microphone.getStream });
+  const translation = useRealtimeTranslation({
+    getStream: microphone.getStream,
+    glossary,
+  });
 
   const isLive = translation.runState !== "idle";
   const paused = translation.runState === "paused";
@@ -61,7 +71,15 @@ export default function Page() {
   // Preferências de leitura ficam no localStorage: quem projeta numa TV não
   // quer reconfigurar fonte e tamanho toda reunião.
   useEffect(() => {
-    queueMicrotask(() => setPreferences(loadPreferences()));
+    queueMicrotask(() => {
+      setPreferences(loadPreferences());
+      setGlossary(loadGlossary());
+    });
+  }, []);
+
+  const updateGlossary = useCallback((entries: GlossaryEntry[]) => {
+    setGlossary(entries);
+    saveGlossary(entries);
   }, []);
 
   // Precisamos saber se existe alguma chave antes de deixar iniciar: a do
@@ -186,7 +204,9 @@ export default function Page() {
           paused={paused}
           showOriginal={preferences.showOriginal}
           preferences={preferences}
+          glossary={glossary}
           stream={microphone.stream}
+          onGlossaryChange={updateGlossary}
           onToggleLanguage={handleToggleLanguage}
           onToggleOriginal={(value) => updatePreferences({ showOriginal: value })}
           onPreferences={updatePreferences}
@@ -220,6 +240,8 @@ export default function Page() {
           </h1>
           <div className="flex items-center gap-2">
             <SettingsDialog
+              glossary={glossary}
+              onGlossaryChange={updateGlossary}
               onKeyChange={setHasLocalKey}
               trigger={
                 <Button variant="outline" size="sm" className="h-7 text-xs">
@@ -288,6 +310,8 @@ export default function Page() {
                 Nenhuma chave da OpenAI configurada. Sem ela não há como traduzir.
               </span>
               <SettingsDialog
+                glossary={glossary}
+                onGlossaryChange={updateGlossary}
                 onKeyChange={setHasLocalKey}
                 trigger={
                   <Button variant="outline" size="sm" className="h-7 text-xs">

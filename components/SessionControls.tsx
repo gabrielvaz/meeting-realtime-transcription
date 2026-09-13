@@ -4,9 +4,11 @@ import { AudioWaveform } from "@/components/AudioWaveform";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { LanguageMenu } from "@/components/LanguageMenu";
 import { ReadingMenu } from "@/components/ReadingMenu";
+import { SettingsDialog } from "@/components/SettingsDialog";
 import { TranscriptHistory } from "@/components/TranscriptHistory";
 import { Button } from "@/components/ui/button";
 import { getLanguage } from "@/lib/languages";
+import type { GlossaryEntry } from "@/lib/glossary";
 import type { ReadingPreferences } from "@/lib/transcriptLog";
 import { formatClock } from "@/lib/usage";
 import type { TargetLanguageCode } from "@/types/realtime";
@@ -19,7 +21,9 @@ interface SessionControlsProps {
   paused: boolean;
   showOriginal: boolean;
   preferences: ReadingPreferences;
+  glossary: GlossaryEntry[];
   stream: MediaStream | null;
+  onGlossaryChange: (entries: GlossaryEntry[]) => void;
   onToggleLanguage: (language: TargetLanguageCode) => void;
   onToggleOriginal: (value: boolean) => void;
   onPreferences: (patch: Partial<ReadingPreferences>) => void;
@@ -36,7 +40,9 @@ export function SessionControls({
   paused,
   showOriginal,
   preferences,
+  glossary,
   stream,
+  onGlossaryChange,
   onToggleLanguage,
   onToggleOriginal,
   onPreferences,
@@ -80,6 +86,17 @@ export function SessionControls({
           onToggleOriginal={onToggleOriginal}
         />
         <ReadingMenu preferences={preferences} onChange={onPreferences} />
+        {/* Alcançável durante a reunião: é falando que se descobre que um termo
+            está saindo errado. A correção passa a valer no texto seguinte. */}
+        <SettingsDialog
+          glossary={glossary}
+          onGlossaryChange={onGlossaryChange}
+          trigger={
+            <Button variant="outline" size="sm" className="h-7 text-xs" data-action="settings">
+              Dicionário
+            </Button>
+          }
+        />
         <TranscriptHistory
           trigger={
             <Button variant="outline" size="sm" className="h-7 text-xs" data-action="history">

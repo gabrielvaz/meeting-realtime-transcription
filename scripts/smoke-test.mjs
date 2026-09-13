@@ -44,6 +44,12 @@ const browser = await puppeteer.launch({
 const page = await browser.newPage();
 
 await page.evaluateOnNewDocument((audioSrc) => {
+  // Dicionário de teste: "modelo" aparece em toda volta do áudio, então se a
+  // correção chega à legenda, "MODELO-X" aparece na tela.
+  window.localStorage.setItem(
+    "live-translation:glossary",
+    JSON.stringify([{ id: "t", term: "MODELO-X", variants: ["modelo"] }]),
+  );
   window.__probe = { gum: 0, peers: [], audios: [] };
 
   navigator.mediaDevices.getUserMedia = async () => {
@@ -242,6 +248,14 @@ const captionStyle = await page.evaluate(() => {
 });
 console.log("estilo da legenda".padEnd(22), JSON.stringify(captionStyle));
 
+// O dicionário precisa ter alcançado o texto renderizado.
+const glossaryApplied = await page.evaluate(() =>
+  [...document.querySelectorAll(".caption")].some((c) =>
+    c.textContent.includes("MODELO-X"),
+  ),
+);
+console.log("dicionário aplicado".padEnd(22), glossaryApplied);
+
 const live = await state();
 const liveGum = live.gum;
 if (live.playingAudio > 0) console.error("ALERTA: áudio traduzido tocando");
@@ -277,6 +291,7 @@ if (captionStyle.past && captionStyle.past === captionStyle.current) {
   failures.push("trecho antigo tem a mesma cor do atual");
 }
 if (captionStyle.distanceFromBottom > 4) failures.push("legenda não rolou até o fim");
+if (!glossaryApplied) failures.push("dicionário não chegou à legenda");
 if (!readingApplied?.font?.includes("Source")) failures.push("troca de fonte não aplicou");
 if (Number(readingApplied?.scale) <= 1) failures.push("aumento de fonte não aplicou");
 if (!history.durationMs) failures.push("histórico sem duração");

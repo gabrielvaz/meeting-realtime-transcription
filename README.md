@@ -146,10 +146,11 @@ simultâneas.
 Outros comandos:
 
 ```bash
-npm run lint          # ESLint
-npx tsc --noEmit      # checagem de tipos
-npm run build         # build de produção (com servidor)
-npm run build:static  # export estático para GitHub Pages, em out/
+npm run lint           # ESLint
+npx tsc --noEmit       # checagem de tipos
+npm run test:glossary  # regras do dicionário de correção
+npm run build          # build de produção (com servidor)
+npm run build:static   # export estático para GitHub Pages, em out/
 ```
 
 Smoke test ponta a ponta contra a API real (precisa do servidor rodando):
@@ -271,6 +272,48 @@ aplicação passa a ser acessível por qualquer um. Isso é seguro **porque cada
 visitante usa a própria chave** — não há chave embutida no bundle. Mas qualquer
 pessoa com o link consegue abrir a página.
 
+## Dicionário de correção de termos
+
+`gpt-realtime-translate` **não aceita glossário**. A documentação é explícita —
+*"The model does not currently support custom prompts, glossaries, or
+pronunciation guides"* — e, diferente dos modelos de transcrição pura, ele
+também não aceita `prompt` nem `keywords`. Não existe como ensinar o termo certo
+à API.
+
+O que existe é corrigir a saída. Em **Configurar → Dicionário** você mapeia a
+forma correta para o que costuma sair errado:
+
+| Forma correta | Corrige |
+|---|---|
+| Cardioline | cardio line, cardiolaine, cardio lane |
+| Cardios | cardius, cárdios, cardio's |
+| Holter | holder, rolter, voltar, olter |
+| ECG | e c g, ecg, e.c.g., eletro |
+
+A correção vale para a **transcrição original e para todas as traduções**, e
+pode ser editada durante a reunião — é falando que se descobre que um termo está
+saindo errado. O campo *Testar* mostra o resultado antes de você depender dele.
+
+Três decisões que fazem isso funcionar de verdade:
+
+- **A correção roda sobre o texto acumulado, nunca sobre o delta isolado.**
+  "Cardioline" chega partido em vários fragmentos; casar em cima de um fragmento
+  solto nunca funcionaria.
+- **Acento e espaçamento são ignorados** na comparação: `e c g` também casa
+  `E-C-G`, e `cárdios` casa `cardios`.
+- **Fronteira de palavra é respeitada.** Corrigir `holder` não pode transformar
+  "Holderman" em "Holterman" — esse caso é teste no
+  [`scripts/glossary-test.mjs`](scripts/glossary-test.mjs), porque é o erro que
+  uma substituição ingênua introduz e que ninguém percebe até aparecer no meio
+  de uma reunião.
+
+O limite honesto: isso corrige **forma escrita**. Se o modelo entendeu outra
+coisa e traduziu a frase inteira errado, trocar uma palavra não conserta.
+
+```bash
+npm run test:glossary
+```
+
 ## Chave do usuário
 
 A aplicação funciona com a chave de quem a usa, colada no modal **Configurar** e
@@ -353,6 +396,7 @@ components/
   SettingsDialog.tsx             modal: chave da API e como funciona
   TranscriptHistory.tsx          modal: histórico, copiar, salvar, apagar
   ConfirmDialog.tsx              confirmação de toda ação destrutiva
+  GlossaryEditor.tsx             editor do dicionário, com campo de teste
   TranslationDisplay.tsx         grid responsivo + transcrição original
   TranslationPanel.tsx           uma região de legenda + controles de áudio
   ui/                            componentes do shadcn (gerados pela CLI)
@@ -366,6 +410,7 @@ lib/
   apiKey.ts                      chave do usuário no localStorage
   audioSource.ts                 AudioSource: microphone | display (tab audio)
   fonts.ts                       as 5 fontes de legenda
+  glossary.ts                    dicionário de correção de termos
   languages.ts                   lista oficial + validação
   subtitleBuffer.ts              deltas → trecho atual / anterior
   transcriptLog.ts               histórico e preferências no localStorage
@@ -441,9 +486,10 @@ Todas verificadas na documentação — nenhuma é suposição.
 3. **Não dá para fixar o idioma falado.** Verificado contra a API:
    `session.audio.input.transcription.language` e `session.audio.input.language`
    retornam `400 unknown_parameter`. A detecção automática é a única opção.
-4. **Sem prompt, glossário ou guia de pronúncia.** Termos de domínio — "Holter",
-   nomes de médicos, siglas — podem ser substituídos incorretamente. Vale montar
-   um conjunto de teste antes de usar em reunião que importa.
+4. **Sem prompt, glossário ou guia de pronúncia na API.** Termos de domínio —
+   "Holter", nomes de médicos, siglas — podem ser substituídos incorretamente.
+   A aplicação compensa com um [dicionário de correção](#dicionário-de-correção-de-termos)
+   no cliente, que conserta a forma escrita mas não o sentido.
 5. **Sem seleção de voz.** A voz de saída acompanha o falante.
 6. **Saída tem 13 idiomas, entrada tem 70+.** Não são o mesmo conjunto.
 7. **Sem speaker labels, sem timestamps por palavra, sem confidence.**

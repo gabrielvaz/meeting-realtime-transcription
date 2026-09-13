@@ -13,6 +13,10 @@
  * O corte acontece por pontuação final (com tamanho mínimo, para não picotar em
  * abreviações curtas), por tamanho máximo, ou por silêncio. Nada é descartado:
  * a tela rola, o texto antigo continua lá.
+ *
+ * O `transform` opcional é o dicionário de correção de termos. Ele roda sobre o
+ * texto **acumulado**, nunca sobre o delta isolado — "Cardioline" chega partido
+ * em vários fragmentos e casar em cima de um fragmento solto não funcionaria.
  */
 
 const SENTENCE_END = /[.!?…。！？]["'”’)\]]?\s*$/;
@@ -31,9 +35,16 @@ export interface SubtitleSnapshot {
 
 const EMPTY: SubtitleSnapshot = { segments: [], current: "", revision: 0 };
 
-export class SubtitleBuffer {
+interface SubtitleBufferOptions {
   /** Chamado a cada trecho fechado — alimenta o histórico persistido. */
+  onSegmentClosed?: (segment: string) => void;
+  /** Correção de termos aplicada ao texto acumulado. */
+  transform?: (text: string) => string;
+}
+
+export class SubtitleBuffer {
   #onSegmentClosed?: (segment: string) => void;
+  #transform?: (text: string) => string;
   #current = "";
   #segments: string[] = [];
   #lastDeltaAt = 0;
@@ -41,8 +52,15 @@ export class SubtitleBuffer {
   #snapshot: SubtitleSnapshot = EMPTY;
   #dirty = false;
 
-  constructor(onSegmentClosed?: (segment: string) => void) {
+  constructor({ onSegmentClosed, transform }: SubtitleBufferOptions = {}) {
     this.#onSegmentClosed = onSegmentClosed;
+    this.#transform = transform;
+  }
+
+  /** Troca o dicionário em uso. Vale para o texto daqui em diante. */
+  setTransform(transform?: (text: string) => string): void {
+    this.#transform = transform;
+    this.#dirty = true;
   }
 
   /** Concatena um delta. Retorna `true` se o snapshot mudou. */
@@ -91,9 +109,10 @@ export class SubtitleBuffer {
 
   snapshot(): SubtitleSnapshot {
     if (this.#dirty) {
+      const current = this.#current.trimStart();
       this.#snapshot = {
         segments: this.#segments,
-        current: this.#current.trimStart(),
+        current: this.#transform ? this.#transform(current) : current,
         revision: this.#revision,
       };
       this.#dirty = false;
@@ -102,9 +121,11 @@ export class SubtitleBuffer {
   }
 
   #closeSegment(): void {
-    const segment = this.#current.trim();
+    const raw = this.#current.trim();
     this.#current = "";
-    if (!segment) return;
+    if (!raw) return;
+    // A correção é gravada no trecho fechado, então vale também no histórico.
+    const segment = this.#transform ? this.#transform(raw) : raw;
     // Cópia nova a cada fechamento: o React compara por referência.
     this.#segments = [...this.#segments, segment];
     this.#onSegmentClosed?.(segment);

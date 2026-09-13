@@ -3,6 +3,7 @@
 import { useCallback, useState } from "react";
 
 import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { GlossaryEditor } from "@/components/GlossaryEditor";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -16,6 +17,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import type { GlossaryEntry } from "@/lib/glossary";
 import { mintClientSecret } from "@/lib/openai/clientSecret";
 import {
   clearApiKey,
@@ -33,10 +35,17 @@ type TestState =
 
 interface SettingsDialogProps {
   trigger: React.ReactNode;
+  glossary: GlossaryEntry[];
+  onGlossaryChange: (entries: GlossaryEntry[]) => void;
   onKeyChange?: (hasKey: boolean) => void;
 }
 
-export function SettingsDialog({ trigger, onKeyChange }: SettingsDialogProps) {
+export function SettingsDialog({
+  trigger,
+  glossary,
+  onGlossaryChange,
+  onKeyChange,
+}: SettingsDialogProps) {
   const [open, setOpen] = useState(false);
   const [savedKey, setSavedKey] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
@@ -109,6 +118,9 @@ export function SettingsDialog({ trigger, onKeyChange }: SettingsDialogProps) {
           <TabsList className="mx-6 mt-4 w-[calc(100%-3rem)]">
             <TabsTrigger value="key" className="flex-1">
               Chave da API
+            </TabsTrigger>
+            <TabsTrigger value="glossary" className="flex-1" data-tab="glossary">
+              Dicionário
             </TabsTrigger>
             <TabsTrigger value="how" className="flex-1">
               Como funciona
@@ -257,6 +269,10 @@ export function SettingsDialog({ trigger, onKeyChange }: SettingsDialogProps) {
                   quando não há chave salva aqui.
                 </p>
               </section>
+            </TabsContent>
+
+            <TabsContent value="glossary" className="m-0 p-6">
+              <GlossaryEditor entries={glossary} onChange={onGlossaryChange} />
             </TabsContent>
 
             <TabsContent value="how" className="m-0 flex flex-col gap-5 p-6 text-[13px] leading-relaxed text-muted-foreground">

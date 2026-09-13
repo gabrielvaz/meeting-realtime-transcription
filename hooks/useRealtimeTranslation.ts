@@ -2,6 +2,11 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import {
+  compileGlossary,
+  glossaryTransform,
+  type GlossaryEntry,
+} from "@/lib/glossary";
 import { SubtitleBuffer, type SubtitleSnapshot } from "@/lib/subtitleBuffer";
 import {
   TranslationSession,
@@ -46,9 +51,14 @@ export interface UsageSnapshot {
 interface UseRealtimeTranslationOptions {
   /** Fonte de áudio compartilhada — capturada uma única vez. */
   getStream: () => MediaStream | null;
+  /** Dicionário de correção de termos. */
+  glossary: readonly GlossaryEntry[];
 }
 
-export function useRealtimeTranslation({ getStream }: UseRealtimeTranslationOptions) {
+export function useRealtimeTranslation({
+  getStream,
+  glossary,
+}: UseRealtimeTranslationOptions) {
   const [runState, setRunState] = useState<RunState>("idle");
   const [tracks, setTracks] = useState<Record<string, LanguageTrack>>({});
   const [sourceSubtitle, setSourceSubtitle] = useState<SubtitleSnapshot>(EMPTY_SUBTITLE);
@@ -79,10 +89,24 @@ export function useRealtimeTranslation({ getStream }: UseRealtimeTranslationOpti
   const sourceOwnerRef = useRef<TargetLanguageCode | null>(null);
   const lastSourceDeltaRef = useRef(0);
 
+  /**
+   * O dicionário compilado vive numa ref: os buffers já criados recebem a
+   * versão nova por `setTransform`, sem recriar sessão nem perder texto.
+   */
+  const transformRef = useRef(glossaryTransform(compileGlossary(glossary)));
+
+  useEffect(() => {
+    const next = glossaryTransform(compileGlossary(glossary));
+    transformRef.current = next;
+    for (const buffer of buffersRef.current.values()) buffer.setTransform(next);
+    sourceBufferRef.current?.setTransform(next);
+  }, [glossary]);
+
   const ensureSourceBuffer = useCallback(() => {
     if (!sourceBufferRef.current) {
-      sourceBufferRef.current = new SubtitleBuffer((segment) => {
-        sourceSegmentsRef.current.push(segment);
+      sourceBufferRef.current = new SubtitleBuffer({
+        onSegmentClosed: (segment) => sourceSegmentsRef.current.push(segment),
+        transform: transformRef.current,
       });
     }
     return sourceBufferRef.current;
@@ -135,8 +159,9 @@ export function useRealtimeTranslation({ getStream }: UseRealtimeTranslationOpti
       let buffer = buffersRef.current.get(language);
       if (!buffer) {
         if (!segmentsRef.current.has(language)) segmentsRef.current.set(language, []);
-        buffer = new SubtitleBuffer((segment) => {
-          segmentsRef.current.get(language)?.push(segment);
+        buffer = new SubtitleBuffer({
+          onSegmentClosed: (segment) => segmentsRef.current.get(language)?.push(segment),
+          transform: transformRef.current,
         });
         buffersRef.current.set(language, buffer);
       }

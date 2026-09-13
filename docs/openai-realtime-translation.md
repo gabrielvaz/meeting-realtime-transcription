@@ -417,7 +417,11 @@ Regras aplicadas nesta app:
 1. **Sem prompt, glossário ou guia de pronúncia.** "The model does not currently
    support custom prompts, glossaries, or pronunciation guides." Nomes próprios
    e termos de domínio (ex.: "Holter") podem ser substituídos incorretamente —
-   a documentação recomenda testar esses casos explicitamente.
+   a documentação recomenda testar esses casos explicitamente. Note o contraste
+   com os modelos de transcrição pura (`gpt-transcribe`), que aceitam `prompt`,
+   `keywords` e `languages`: nada disso existe em `/v1/realtime/translations`.
+   A única saída é corrigir o texto no cliente depois que ele chega — é o que
+   `lib/glossary.ts` faz.
 2. **Sem seleção de voz.** A voz da saída imita o falante de origem.
 3. **Fala já no idioma de saída pode gerar silêncio.** "Realtime Translation
    tries not to translate speech that is already in the selected output
