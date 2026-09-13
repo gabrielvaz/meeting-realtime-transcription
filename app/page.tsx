@@ -65,10 +65,15 @@ export default function Page() {
   }, []);
 
   // Precisamos saber se existe alguma chave antes de deixar iniciar: a do
-  // usuário (localStorage) ou a do servidor (.env.local).
+  // usuário (localStorage) ou a do servidor (.env.local). Na build estática
+  // não há servidor, então nem perguntamos.
   useEffect(() => {
     queueMicrotask(() => {
       setHasLocalKey(Boolean(readApiKey()));
+      if (process.env.NEXT_PUBLIC_STATIC_EXPORT === "1") {
+        setHasServerKey(false);
+        return;
+      }
       void fetch("/api/realtime/token")
         .then((response) => response.json())
         .then((body: { serverKey?: boolean }) => setHasServerKey(Boolean(body.serverKey)))
@@ -302,7 +307,9 @@ export default function Page() {
           className="self-start"
           size="lg"
           onClick={handleStart}
-          disabled={starting || missingKey || microphone.status === "requesting"}
+          // `starting` já impede clique duplo. Não amarramos o botão ao estado
+          // da prévia: uma prévia pendurada não pode impedir de traduzir.
+          disabled={starting || missingKey}
         >
           {starting ? "Conectando…" : "Iniciar tradução"}
         </Button>

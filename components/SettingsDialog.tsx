@@ -16,6 +16,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { mintClientSecret } from "@/lib/openai/clientSecret";
 import {
   clearApiKey,
   looksLikeApiKey,
@@ -77,14 +78,10 @@ export function SettingsDialog({ trigger, onKeyChange }: SettingsDialogProps) {
     if (!key) return;
     setTest({ kind: "testing" });
     try {
-      const response = await fetch("/api/realtime/token", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ targetLanguage: "pt", apiKey: key, verifyOnly: true }),
-      });
-      const body = (await response.json()) as { ok?: boolean; error?: string };
-      if (response.ok && body.ok) setTest({ kind: "ok" });
-      else setTest({ kind: "error", message: body.error ?? `HTTP ${response.status}` });
+      // Cria um segredo e descarta. Criar não custa nada — a cobrança é por
+      // minuto de áudio — e valida chave, saldo e acesso ao modelo de uma vez.
+      await mintClientSecret({ targetLanguage: "pt", apiKey: key });
+      setTest({ kind: "ok" });
     } catch (error) {
       setTest({
         kind: "error",

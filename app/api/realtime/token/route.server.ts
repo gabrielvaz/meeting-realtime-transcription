@@ -2,19 +2,28 @@ import { createHash, randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 
 import { isTargetLanguageCode } from "@/lib/languages";
-import { classifyHttpError } from "@/lib/openai/realtimeTranslation";
+import {
+  MODEL,
+  classifyHttpError,
+  sessionBody,
+} from "@/lib/openai/clientSecret";
 import type { TargetLanguageCode } from "@/types/realtime";
 
 /**
- * Cria o client secret efêmero de uma sessão de Realtime Translation.
+ * Cria o client secret efêmero usando a chave do **servidor**.
  *
- * A chave permanente só existe aqui: ou vem de `OPENAI_API_KEY` no servidor,
- * ou é enviada pelo próprio usuário (guardada no `localStorage` do navegador
- * dele). Em nenhum dos casos ela é persistida, logada ou devolvida. O browser
- * recebe apenas `{ value, expiresAt }` — o segredo de curta duração usado como
- * Bearer no POST do SDP para `/v1/realtime/translations/calls`.
+ * Este caminho existe para quem não quer a chave no navegador: defina
+ * `OPENAI_API_KEY` no `.env.local` e a interface passa a usar esta rota. Quando
+ * o usuário configura a própria chave, o navegador fala direto com a OpenAI e
+ * esta rota não é chamada — ver `lib/openai/clientSecret.ts`.
  *
- * Fonte: docs/openai-realtime-translation.md §3.1 e §9.
+ * O sufixo `.server.ts` no nome do arquivo não é decorativo: é ele que tira
+ * esta rota do export estático do GitHub Pages, via `pageExtensions` em
+ * `next.config.ts`. Lá não existe servidor, e portanto não existe este caminho.
+ *
+ * A chave nunca é persistida, logada nem devolvida. O browser recebe apenas
+ * `{ value, expiresAt }` — o segredo de curta duração usado como Bearer no POST
+ * do SDP para `/v1/realtime/translations/calls`.
  */
 
 export const runtime = "nodejs";
@@ -22,21 +31,6 @@ export const dynamic = "force-dynamic";
 
 const CLIENT_SECRET_URL =
   "https://api.openai.com/v1/realtime/translations/client_secrets";
-
-const MODEL = "gpt-realtime-translate";
-
-/**
- * Modelo de transcrição da língua de origem. Sem ele o servidor não emite
- * `session.input_transcript.delta` (e a opção "mostrar transcrição original"
- * fica vazia).
- */
-const INPUT_TRANSCRIPTION_MODEL = "gpt-realtime-whisper";
-
-/**
- * `far_field` é o modo para microfone de notebook ou de sala de reunião, que é
- * o cenário-alvo desta aplicação. `near_field` seria para headset.
- */
-const NOISE_REDUCTION = { type: "far_field" as const };
 
 /**
  * Identificador anônimo e estável por processo, só para o header
@@ -59,39 +53,25 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  let targetLanguage: unknown;
-  let providedKey: unknown;
-  let verifyOnly = false;
-  try {
-    const body = (await request.json()) as {
-      targetLanguage?: unknown;
-      apiKey?: unknown;
-      verifyOnly?: unknown;
-    };
-    targetLanguage = body.targetLanguage;
-    providedKey = body.apiKey;
-    verifyOnly = body.verifyOnly === true;
-  } catch {
-    return NextResponse.json(
-      { error: "Corpo da requisição inválido.", kind: "unknown" },
-      { status: 400 },
-    );
-  }
-
-  // A chave do usuário tem precedência: se ele configurou uma, é a dele que
-  // deve ser cobrada, mesmo que o servidor também tenha uma.
-  const apiKey =
-    (typeof providedKey === "string" && providedKey.trim()) ||
-    process.env.OPENAI_API_KEY;
-
+  const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
     return NextResponse.json(
       {
         error:
-          "Nenhuma chave da OpenAI configurada. Abra Configurar e informe a sua, ou crie um .env.local no servidor.",
+          "Nenhuma chave da OpenAI no servidor. Abra Configurar e informe a sua.",
         kind: "auth",
       },
       { status: 401 },
+    );
+  }
+
+  let targetLanguage: unknown;
+  try {
+    ({ targetLanguage } = (await request.json()) as { targetLanguage?: unknown });
+  } catch {
+    return NextResponse.json(
+      { error: "Corpo da requisição inválido.", kind: "unknown" },
+      { status: 400 },
     );
   }
 
@@ -119,18 +99,7 @@ export async function POST(request: Request) {
         "Content-Type": "application/json",
         "OpenAI-Safety-Identifier": SAFETY_IDENTIFIER,
       },
-      body: JSON.stringify({
-        session: {
-          model: MODEL,
-          audio: {
-            input: {
-              transcription: { model: INPUT_TRANSCRIPTION_MODEL },
-              noise_reduction: NOISE_REDUCTION,
-            },
-            output: { language },
-          },
-        },
-      }),
+      body: JSON.stringify(sessionBody(language)),
     });
   } catch (error) {
     return NextResponse.json(
@@ -167,20 +136,8 @@ export async function POST(request: Request) {
 
   if (!data || typeof data.value !== "string") {
     return NextResponse.json(
-      {
-        error: "A OpenAI não devolveu um client secret.",
-        kind: "api-unavailable",
-      },
+      { error: "A OpenAI não devolveu um client secret.", kind: "api-unavailable" },
       { status: 502 },
-    );
-  }
-
-  // "Testar chave" só precisa saber que o segredo foi criado; devolver o
-  // valor seria expor uma credencial sem motivo.
-  if (verifyOnly) {
-    return NextResponse.json(
-      { ok: true, model: MODEL },
-      { headers: { "Cache-Control": "no-store" } },
     );
   }
 

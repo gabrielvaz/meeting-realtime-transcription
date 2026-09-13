@@ -145,9 +145,10 @@ simultâneas.
 Outros comandos:
 
 ```bash
-npm run lint      # ESLint
-npx tsc --noEmit  # checagem de tipos
-npm run build     # build de produção
+npm run lint          # ESLint
+npx tsc --noEmit      # checagem de tipos
+npm run build         # build de produção (com servidor)
+npm run build:static  # export estático para GitHub Pages, em out/
 ```
 
 Smoke test ponta a ponta contra a API real (precisa do servidor rodando):
@@ -226,6 +227,48 @@ O que **não** se multiplica é a captura: `getUserMedia()` roda uma vez e a mes
 padrão do WebRTC, cada `RTCPeerConnection` cria seu próprio `RTCRtpSender`.
 
 ---
+
+## Dois alvos: servidor e estático
+
+O mesmo código gera duas coisas diferentes.
+
+| | `npm run build` | `npm run build:static` |
+|---|---|---|
+| Alvo | servidor Next (Vercel, Docker, `next start`) | arquivos estáticos (GitHub Pages) |
+| Route Handler | existe | **não existe** |
+| Origem da chave | `.env.local` no servidor, ou a do usuário | só a do usuário |
+| Quem cria o client secret | o servidor, ou o navegador | o navegador |
+
+Na build estática não há servidor, então o Route Handler precisa sair do
+bundle. Ele sai porque o arquivo se chama `route.server.ts` e o
+`pageExtensions` do `next.config.ts` deixa de reconhecer esse sufixo quando
+`STATIC_EXPORT=1`. Não é truque gratuito: é a forma de manter um único código
+para os dois alvos sem `if` espalhado.
+
+O caminho direto navegador → OpenAI só é possível porque
+`POST /v1/realtime/translations/client_secrets` responde com CORS aberto. Isso
+foi **verificado**, não assumido: de origem `https://example.com`, a requisição
+retorna `200` com `value`. Se a OpenAI fechar esse CORS, a versão estática para
+de funcionar e só o alvo com servidor sobrevive.
+
+### Publicar no GitHub Pages
+
+`.github/workflows/pages.yml` faz build e deploy a cada push na `main`. O
+`basePath` vem do nome do repositório, então funciona como *project page*
+(`https://<usuário>.github.io/<repo>/`) sem configuração extra.
+
+Duas condições fora do código:
+
+- **Pages precisa estar habilitado** no repositório, em Settings → Pages, com
+  *Source: GitHub Actions*.
+- **Repositório privado exige plano pago.** No plano gratuito, Pages só funciona
+  em repositório público. O deploy falha com
+  `Your current plan does not support GitHub Pages for this repository`.
+
+E uma consequência a considerar antes de tornar o repositório público: a
+aplicação passa a ser acessível por qualquer um. Isso é seguro **porque cada
+visitante usa a própria chave** — não há chave embutida no bundle. Mas qualquer
+pessoa com o link consegue abrir a página.
 
 ## Chave do usuário
 

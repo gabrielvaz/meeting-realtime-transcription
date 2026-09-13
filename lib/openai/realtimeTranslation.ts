@@ -1,6 +1,9 @@
-import { readApiKey } from "@/lib/apiKey";
+import {
+  ClientSecretError,
+  mintClientSecret,
+  classifyHttpError,
+} from "@/lib/openai/clientSecret";
 import type {
-  ClientSecretResponse,
   SessionError,
   SessionStatus,
   TargetLanguageCode,
@@ -515,46 +518,18 @@ export class TranslationSession {
   /* Token                                                            */
   /* ---------------------------------------------------------------- */
 
-  async #requestClientSecret(): Promise<ClientSecretResponse> {
-    const endpoint = this.#options.tokenEndpoint ?? "/api/realtime/token";
-    let response: Response;
+  async #requestClientSecret() {
     try {
-      response = await fetch(endpoint, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        // A chave do usuário, quando existe, só trafega daqui até o Route
-        // Handler da mesma origem. Nunca vai para a OpenAI a partir do browser.
-        body: JSON.stringify({
-          targetLanguage: this.targetLanguage,
-          apiKey: readApiKey() ?? undefined,
-        }),
+      return await mintClientSecret({
+        targetLanguage: this.targetLanguage,
+        tokenEndpoint: this.#options.tokenEndpoint,
       });
     } catch (error) {
-      throw new SessionFailure(
-        {
-          kind: "api-unavailable",
-          message: `Não foi possível falar com o servidor: ${messageOf(error)}`,
-        },
-        true,
-      );
+      if (error instanceof ClientSecretError) {
+        throw new SessionFailure(error.detail, error.retryable);
+      }
+      throw error;
     }
-
-    const payload = (await response.json().catch(() => null)) as
-      | (ClientSecretResponse & { error?: string; kind?: SessionError["kind"] })
-      | null;
-
-    if (!response.ok || !payload?.value) {
-      const kind = payload?.kind ?? classifyHttpError(response.status, "").kind;
-      throw new SessionFailure(
-        {
-          kind,
-          message: payload?.error ?? `Falha ao criar a sessão (HTTP ${response.status}).`,
-        },
-        kind === "api-unavailable" || kind === "rate-limit",
-      );
-    }
-
-    return payload;
   }
 
   /* ---------------------------------------------------------------- */
@@ -588,36 +563,6 @@ class SessionFailure extends Error {
     super(detail.message);
     this.name = "SessionFailure";
   }
-}
-
-export function classifyHttpError(status: number, body: string): SessionError {
-  if (status === 401 || status === 403) {
-    return {
-      kind: "auth",
-      message:
-        "Credencial recusada pela OpenAI. Confira a chave em Configurar — ou o saldo da conta.",
-    };
-  }
-  if (status === 429) {
-    return {
-      kind: "rate-limit",
-      message:
-        "Limite de uso atingido. Reduza o número de idiomas simultâneos ou aguarde.",
-    };
-  }
-  if (status >= 500) {
-    return { kind: "api-unavailable", message: "A API da OpenAI está indisponível." };
-  }
-  if (status === 400 && /language/i.test(body)) {
-    return {
-      kind: "unsupported-language",
-      message: "Idioma de saída não suportado pela API.",
-    };
-  }
-  return {
-    kind: "unknown",
-    message: body.slice(0, 300) || `Erro HTTP ${status}.`,
-  };
 }
 
 function messageOf(error: unknown): string {

@@ -43,3 +43,6 @@ next-env.d.ts
 
 # artefatos do smoke test
 .smoke/
+
+# export estático do GitHub Pages
+/out
