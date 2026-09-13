@@ -29,6 +29,10 @@ export function GlossaryEditor({ entries, onChange }: GlossaryEditorProps) {
   const [sample, setSample] = useState(SAMPLE_TEXT);
 
   const compiled = useMemo(() => compileGlossary(entries), [entries]);
+  const missingDefaults = useMemo(() => {
+    const known = new Set(entries.map((entry) => entry.term.trim().toLowerCase()));
+    return DEFAULT_GLOSSARY.filter((entry) => !known.has(entry.term.toLowerCase()));
+  }, [entries]);
   const corrected = useMemo(
     () => applyGlossary(sample, compiled),
     [sample, compiled],
@@ -61,6 +65,10 @@ export function GlossaryEditor({ entries, onChange }: GlossaryEditorProps) {
         depois que ele chega, tanto na transcrição original quanto nas traduções.
         Funciona para a forma escrita da palavra; não conserta uma frase que o modelo
         entendeu errado por inteiro.
+      </p>
+      <p className="text-[13px] leading-relaxed text-muted-foreground">
+        Tudo aqui fica só no <code className="font-mono">localStorage</code> deste
+        navegador. Termos removidos não voltam sozinhos numa versão futura.
       </p>
 
       <div className="flex flex-col divide-y divide-border rounded-sm border border-border">
@@ -130,7 +138,9 @@ export function GlossaryEditor({ entries, onChange }: GlossaryEditorProps) {
         </div>
         <p className="text-[13px] text-muted-foreground">
           Acento e espaçamento são ignorados na comparação: <code className="font-mono">e c g</code>{" "}
-          também casa <code className="font-mono">E-C-G</code>.
+          também casa <code className="font-mono">E-C-G</code>. Evite variantes que sejam
+          palavras legítimas — corrigir <code className="font-mono">voltar</code> para
+          Holter estragaria o verbo.
         </p>
       </div>
 
@@ -155,20 +165,17 @@ export function GlossaryEditor({ entries, onChange }: GlossaryEditorProps) {
         </p>
       </div>
 
-      <div className="flex flex-wrap gap-2 border-t border-border pt-5">
+      <div className="flex flex-wrap items-center gap-2 border-t border-border pt-5">
         <Button
           variant="outline"
           size="sm"
           className="h-8 text-xs"
-          onClick={() => {
-            const known = new Set(entries.map((entry) => entry.term.toLowerCase()));
-            onChange([
-              ...entries,
-              ...DEFAULT_GLOSSARY.filter((entry) => !known.has(entry.term.toLowerCase())),
-            ]);
-          }}
+          disabled={missingDefaults.length === 0}
+          onClick={() => onChange([...entries, ...missingDefaults])}
         >
-          Restaurar termos de exemplo
+          {missingDefaults.length
+            ? `Restaurar ${missingDefaults.length} termo${missingDefaults.length === 1 ? "" : "s"} padrão`
+            : "Todos os termos padrão estão na lista"}
         </Button>
         {entries.length ? (
           <ConfirmDialog

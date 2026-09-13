@@ -281,14 +281,23 @@ também não aceita `prompt` nem `keywords`. Não existe como ensinar o termo ce
 à API.
 
 O que existe é corrigir a saída. Em **Configurar → Dicionário** você mapeia a
-forma correta para o que costuma sair errado:
+forma correta para o que costuma sair errado. A lista já vem preenchida com 37
+termos, todos editáveis e removíveis:
 
-| Forma correta | Corrige |
+| Grupo | Termos |
 |---|---|
-| Cardioline | cardio line, cardiolaine, cardio lane |
-| Cardios | cardius, cárdios, cardio's |
-| Holter | holder, rolter, voltar, olter |
-| ECG | e c g, ecg, e.c.g., eletro |
+| Empresas | Cardioline, Cardios |
+| Produtos Cardioline | Vireo ARK, ECGWebApp, WebApp, touchECG, ClickECG, Clickholter, CubeStress, CardioLight, Walk200, Walk400, Cardioline Research |
+| Modelos | ECG100S, ECG100L, ECG200S, ECG200L, ECG300G |
+| Produtos Cardios | WinCardio, ErgoPC, HD+ |
+| Clínicos | Holter, ECG, espirometria |
+| Negócio | MRR, ARR, CAC, LTV, ICP, SaaS, B2B, CRM, ERP |
+| Regulatório | Anvisa, LGPD, FDA, SUS |
+
+Adicionar e remover mexe **só no `localStorage`** — nada sai do navegador. E a
+remoção é lembrada: um termo padrão que você apagou não ressuscita quando a
+lista padrão crescer numa versão futura. Termos novos do padrão, esses sim,
+aparecem sozinhos para quem ainda não os tem.
 
 A correção vale para a **transcrição original e para todas as traduções**, e
 pode ser editada durante a reunião — é falando que se descobre que um termo está
@@ -306,12 +315,20 @@ Três decisões que fazem isso funcionar de verdade:
   [`scripts/glossary-test.mjs`](scripts/glossary-test.mjs), porque é o erro que
   uma substituição ingênua introduz e que ninguém percebe até aparecer no meio
   de uma reunião.
+- **Variante não pode ser palavra legítima.** Eu tinha posto `voltar` como
+  variante de Holter e `eletro` como variante de ECG; as duas destruiriam texto
+  correto ("vamos voltar ao assunto" → "vamos Holter ao assunto") e foram
+  removidas. O teste tem casos negativos justamente para isso.
+
+O único trade-off assumido é `holder` → Holter: é palavra inglesa legítima, mas
+de longe o erro mais comum numa reunião em português. Quem conduz reuniões em
+inglês deve remover essa variante.
 
 O limite honesto: isso corrige **forma escrita**. Se o modelo entendeu outra
 coisa e traduziu a frase inteira errado, trocar uma palavra não conserta.
 
 ```bash
-npm run test:glossary
+npm run test:glossary   # 31 casos, incluindo os negativos
 ```
 
 ## Chave do usuário
