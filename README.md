@@ -59,7 +59,8 @@ Os oito pontos exigidos, todos verificados na documentação oficial em
    inserir espaços entre deltas**. A API **não emite evento de fim de frase**,
    então o corte em trechos é feito no cliente
    ([`lib/subtitleBuffer.ts`](lib/subtitleBuffer.ts)) por pontuação final,
-   tamanho máximo ou silêncio de 2,2 s.
+   tamanho máximo ou silêncio de 2,2 s. Nada é descartado: os trechos fechados
+   continuam em tela, em cinza, e a área rola.
 
 6. **Tradução para múltiplos idiomas.** O idioma de destino é fixado na criação
    da sessão (`session.audio.output.language`) e há **um idioma por sessão** —
@@ -497,7 +498,9 @@ carrega um identificador anônimo por processo, nunca um dado pessoal.
    está ouvindo você, e explica o motivo quando não está — ver abaixo.
 3. Marque um ou mais idiomas de destino.
 4. "Iniciar tradução". A legenda começa a crescer enquanto a pessoa ainda fala.
-5. Durante a sessão: **Idiomas** liga e desliga destinos sem parar os demais;
+5. Durante a sessão: **Idiomas** liga e desliga destinos sem parar os demais —
+   desmarcar esconde o idioma e fecha a sessão dele, mas **não apaga o texto**,
+   que reaparece intacto ao marcar de novo;
    **Leitura** ajusta tamanho, fonte e organização; **Pausar** interrompe a
    captura e a cobrança sem perder o texto; **Limpar** zera a transcrição;
    **Histórico** abre o que já foi gravado.
@@ -517,9 +520,13 @@ lado da onda diz qual é:
 O console também loga `[mic] track` com `label`, `readyState`, `muted` e
 `getSettings()`.
 
-Por padrão só o **primeiro** idioma começa audível — três traduções falando
-juntas é ruído. As legendas dos outros continuam funcionando normalmente mesmo
-mutadas.
+Esta é uma ferramenta de **legenda**: o áudio traduzido nunca é reproduzido.
+
+Ele continua sendo recebido, e isso não é desleixo — é obrigatório. Testei um
+transceiver `sendonly` para nem receber a track: a conexão estabelece
+normalmente e **nenhum transcript chega**. O áudio traduzido é o que carrega a
+legenda. Então a track é recebida e simplesmente nunca ligada a um elemento de
+áudio.
 
 **Pausar** é pausa de verdade: o áudio para de subir, as sessões são fechadas e
 a cobrança por minuto para junto. O texto fica onde está e a retomada continua

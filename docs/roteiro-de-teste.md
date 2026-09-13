@@ -43,6 +43,20 @@ Latência medida até o primeiro delta de tradução (`transcript.first`):
 > de vida da página. O invariante que importa é **1 por sessão**, e é isso que o
 > teste passou a medir.
 
+### Dois bugs que o teste pegou e o olho não pegaria
+
+**Cor da legenda.** Uma substituição de CSS não casou e falhou em silêncio, e
+trecho antigo e trecho atual ficaram com a mesma cor. Num screenshot os dois
+parecem pretos; medindo, `getComputedStyle().color` era idêntico. O teste agora
+compara as duas cores e falha se forem iguais.
+
+**Rolagem que se soltava sozinha.** A legenda desancorava do fim quando a
+altura do conteúdo mudava — trocar a organização do grid, o tamanho da fonte ou
+reexibir um idioma dispara `scroll` sem ninguém ter rolado nada. O efeito era
+o texto novo parar de aparecer. Agora só gesto do usuário (`wheel`,
+`touchmove`, `keydown`) desancora, e o teste verifica
+`scrollHeight - scrollTop - clientHeight ≈ 0`.
+
 ### Sobre clicar em componentes Radix
 
 Os menus do shadcn respondem a eventos reais de ponteiro, não a `element.click()`

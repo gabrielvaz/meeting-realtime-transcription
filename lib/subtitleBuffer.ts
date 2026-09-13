@@ -7,11 +7,12 @@
  * 1. "Transcript deltas are append-only text fragments. Clients should not
  *    insert unconditional spaces between deltas." → concatenação crua, sempre.
  * 2. A API **não** emite evento de fim de trecho para transcript. O único
- *    evento terminal é `session.closed`. Logo o fatiamento em
- *    "trecho atual / trecho anterior" é responsabilidade do cliente.
+ *    evento terminal é `session.closed`. Logo o fatiamento em frases é
+ *    responsabilidade do cliente.
  *
  * O corte acontece por pontuação final (com tamanho mínimo, para não picotar em
- * abreviações curtas), por tamanho máximo, ou por silêncio.
+ * abreviações curtas), por tamanho máximo, ou por silêncio. Nada é descartado:
+ * a tela rola, o texto antigo continua lá.
  */
 
 const SENTENCE_END = /[.!?…。！？]["'”’)\]]?\s*$/;
@@ -20,28 +21,21 @@ const MAX_SEGMENT_CHARS = 260;
 const IDLE_FLUSH_MS = 2200;
 
 export interface SubtitleSnapshot {
-  /** Trecho sendo falado agora. Opacidade total na interface. */
+  /** Trechos já fechados, do mais antigo para o mais novo. */
+  segments: readonly string[];
+  /** Trecho sendo falado agora. */
   current: string;
-  /**
-   * Trecho imediatamente anterior, exibido esmaecido. Só guardamos um: a tela
-   * é closed caption, não histórico de conversa, e o que sai de cena some.
-   */
-  previous: string | null;
   /** Incrementa a cada mudança; serve de chave de re-render. */
   revision: number;
 }
 
-const EMPTY: SubtitleSnapshot = {
-  current: "",
-  previous: null,
-  revision: 0,
-};
+const EMPTY: SubtitleSnapshot = { segments: [], current: "", revision: 0 };
 
 export class SubtitleBuffer {
   /** Chamado a cada trecho fechado — alimenta o histórico persistido. */
   #onSegmentClosed?: (segment: string) => void;
   #current = "";
-  #previous: string | null = null;
+  #segments: string[] = [];
   #lastDeltaAt = 0;
   #revision = 0;
   #snapshot: SubtitleSnapshot = EMPTY;
@@ -78,7 +72,7 @@ export class SubtitleBuffer {
     return true;
   }
 
-  /** Fecha o trecho pendente — usado ao encerrar a sessão. */
+  /** Fecha o trecho pendente — usado ao pausar ou encerrar. */
   finalize(): boolean {
     if (!this.#current.trim()) return false;
     this.#closeSegment();
@@ -88,7 +82,7 @@ export class SubtitleBuffer {
 
   reset(): void {
     this.#current = "";
-    this.#previous = null;
+    this.#segments = [];
     this.#lastDeltaAt = 0;
     this.#revision = 0;
     this.#snapshot = EMPTY;
@@ -98,8 +92,8 @@ export class SubtitleBuffer {
   snapshot(): SubtitleSnapshot {
     if (this.#dirty) {
       this.#snapshot = {
+        segments: this.#segments,
         current: this.#current.trimStart(),
-        previous: this.#previous,
         revision: this.#revision,
       };
       this.#dirty = false;
@@ -111,7 +105,8 @@ export class SubtitleBuffer {
     const segment = this.#current.trim();
     this.#current = "";
     if (!segment) return;
-    this.#previous = segment;
+    // Cópia nova a cada fechamento: o React compara por referência.
+    this.#segments = [...this.#segments, segment];
     this.#onSegmentClosed?.(segment);
   }
 

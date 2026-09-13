@@ -123,6 +123,16 @@ body {
   }
 }
 
+/* Só o trecho sendo falado é preto. Tudo o que já fechou vira cinza e
+   continua na tela — o texto nunca some, a área é que rola. */
+.caption.is-current {
+  color: var(--ink);
+}
+
+.caption.is-past {
+  color: var(--ink-soft);
+}
+
 .caption {
   margin: 0;
   /* O menu de leitura multiplica o tamanho base da densidade. */
@@ -130,6 +140,14 @@ body {
   line-height: 1.24;
   letter-spacing: -0.015em;
   text-wrap: pretty;
+}
+
+.panel-body {
+  justify-content: flex-start;
+}
+
+.panel-body > :first-child {
+  margin-top: auto;
 }
 
 .source-text {

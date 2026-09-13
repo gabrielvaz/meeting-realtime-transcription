@@ -15,25 +15,23 @@ import type {
   TargetLanguageCode,
 } from "@/types/realtime";
 
-const EMPTY_SUBTITLE: SubtitleSnapshot = {
-  current: "",
-  previous: null,
-  revision: 0,
-};
+const EMPTY_SUBTITLE: SubtitleSnapshot = { segments: [], current: "", revision: 0 };
 
 const IDLE_FLUSH_TICK_MS = 400;
 const CLOCK_TICK_MS = 1_000;
 /** Salva o histórico durante a sessão para não perder tudo se a aba cair. */
 const AUTOSAVE_MS = 15_000;
-const DEFAULT_VOLUME = 1;
 
 export interface LanguageTrack {
   language: TargetLanguageCode;
   status: SessionStatus;
   error: SessionError | null;
   subtitle: SubtitleSnapshot;
-  muted: boolean;
-  volume: number;
+  /**
+   * Desmarcar um idioma o esconde e fecha a sessão, mas **não** apaga o que já
+   * foi traduzido. Marcar de novo reabre a sessão e o texto reaparece.
+   */
+  visible: boolean;
   diagnostics: TranslationSessionDiagnostics | null;
 }
 
@@ -131,7 +129,7 @@ export function useRealtimeTranslation({ getStream }: UseRealtimeTranslationOpti
   /* ---------------------------------------------------------------- */
 
   const createSession = useCallback(
-    (language: TargetLanguageCode, audible: boolean) => {
+    (language: TargetLanguageCode) => {
       // Ao retomar depois de uma pausa o buffer é reaproveitado, e é isso que
       // faz a legenda continuar de onde parou em vez de recomeçar do zero.
       let buffer = buffersRef.current.get(language);
@@ -148,8 +146,6 @@ export function useRealtimeTranslation({ getStream }: UseRealtimeTranslationOpti
       const session = new TranslationSession({
         targetLanguage: language,
         getStream,
-        audible,
-        volume: DEFAULT_VOLUME,
         onStatus: (status, error) => {
           patchTrack(language, { status, error: error ?? null });
         },
@@ -179,8 +175,7 @@ export function useRealtimeTranslation({ getStream }: UseRealtimeTranslationOpti
           status: "requesting-token",
           error: null,
           subtitle: activeBuffer.snapshot(),
-          muted: !audible,
-          volume: previous[language]?.volume ?? DEFAULT_VOLUME,
+          visible: true,
           diagnostics: null,
         },
       }));
@@ -205,6 +200,7 @@ export function useRealtimeTranslation({ getStream }: UseRealtimeTranslationOpti
         patchTrack(language, { status: "closed" });
         return;
       }
+
 
       buffersRef.current.delete(language);
       setTracks((previous) => {
@@ -253,8 +249,7 @@ export function useRealtimeTranslation({ getStream }: UseRealtimeTranslationOpti
       setSourceActive(false);
       setCaptureEnabled(true);
 
-      // Só o primeiro idioma começa audível.
-      languages.forEach((language, index) => createSession(language, index === 0));
+      languages.forEach((language) => createSession(language));
       setRunState("running");
     },
     [createSession, ensureSourceBuffer, setCaptureEnabled],
@@ -300,10 +295,9 @@ export function useRealtimeTranslation({ getStream }: UseRealtimeTranslationOpti
       setCaptureEnabled(true);
       meterRef.current.resume();
       sourceOwnerRef.current = languages[0] ?? null;
-      languages.forEach((language, index) => {
+      languages.forEach((language) => {
         if (sessionsRef.current.has(language)) return;
-        const wasAudible = index === 0;
-        createSession(language, wasAudible);
+        createSession(language);
       });
       setRunState("running");
     },
@@ -324,61 +318,28 @@ export function useRealtimeTranslation({ getStream }: UseRealtimeTranslationOpti
     setSourceActive(false);
   }, [patchTrack]);
 
+  /** Marca o idioma de novo: reabre a sessão e o texto anterior reaparece. */
   const addLanguage = useCallback(
     (language: TargetLanguageCode) => {
       if (sessionsRef.current.has(language)) return;
-      const audible = sessionsRef.current.size === 0;
       if (!sourceOwnerRef.current) sourceOwnerRef.current = language;
-      createSession(language, audible);
+      createSession(language);
     },
     [createSession],
   );
 
+  /**
+   * Desmarcar esconde o idioma e fecha a sessão (parando a cobrança), mas o
+   * buffer sobrevive: o texto já traduzido reaparece intacto se o idioma for
+   * marcado de novo.
+   */
   const removeLanguage = useCallback(
     (language: TargetLanguageCode) => {
-      destroySession(language);
-      // Se o idioma removido era o único com som, o primeiro que sobrou assume
-      // — senão a sessão continua rodando muda, sem motivo aparente.
-      setTracks((previous) => {
-        const codes = Object.keys(previous) as TargetLanguageCode[];
-        if (!codes.length || codes.some((code) => !previous[code].muted)) {
-          return previous;
-        }
-        const heir = codes[0];
-        sessionsRef.current.get(heir)?.setMuted(false);
-        return { ...previous, [heir]: { ...previous[heir], muted: false } };
-      });
+      buffersRef.current.get(language)?.finalize();
+      destroySession(language, true);
+      patchTrack(language, { visible: false, status: "closed" });
     },
-    [destroySession],
-  );
-
-  const setMuted = useCallback(
-    (language: TargetLanguageCode, muted: boolean) => {
-      sessionsRef.current.get(language)?.setMuted(muted);
-      patchTrack(language, { muted });
-    },
-    [patchTrack],
-  );
-
-  /** "Ouvir tradução": deixa só este idioma audível. */
-  const listenExclusively = useCallback((language: TargetLanguageCode) => {
-    setTracks((previous) => {
-      const next = { ...previous };
-      for (const code of Object.keys(next) as TargetLanguageCode[]) {
-        const muted = code !== language;
-        sessionsRef.current.get(code)?.setMuted(muted);
-        next[code] = { ...next[code], muted };
-      }
-      return next;
-    });
-  }, []);
-
-  const setVolume = useCallback(
-    (language: TargetLanguageCode, volume: number) => {
-      sessionsRef.current.get(language)?.setVolume(volume);
-      patchTrack(language, { volume });
-    },
-    [patchTrack],
+    [destroySession, patchTrack],
   );
 
   /** Repassa uma nova track (troca de microfone) sem derrubar as sessões. */
@@ -465,9 +426,6 @@ export function useRealtimeTranslation({ getStream }: UseRealtimeTranslationOpti
     clearTranscripts,
     addLanguage,
     removeLanguage,
-    setMuted,
-    setVolume,
-    listenExclusively,
     replaceTrack,
   };
 }

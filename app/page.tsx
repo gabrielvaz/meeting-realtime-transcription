@@ -109,9 +109,9 @@ export default function Page() {
   // Mantém a ordem da lista de idiomas, não a ordem de clique.
   const orderedTracks = useMemo(() => {
     const order = TARGET_LANGUAGES.map((language) => language.code);
-    return Object.values(translation.tracks).sort(
-      (a, b) => order.indexOf(a.language) - order.indexOf(b.language),
-    );
+    return Object.values(translation.tracks)
+      .filter((track) => track.visible)
+      .sort((a, b) => order.indexOf(a.language) - order.indexOf(b.language));
   }, [translation.tracks]);
 
   const reconnecting = orderedTracks.some(
@@ -201,10 +201,6 @@ export default function Page() {
           sourceActive={translation.sourceActive}
           paused={paused}
           preferences={preferences}
-          showAudioControls
-          onListen={translation.listenExclusively}
-          onToggleMute={translation.setMuted}
-          onVolume={translation.setVolume}
         />
       </div>
     );

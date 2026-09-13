@@ -85,15 +85,15 @@ const state = () => page.evaluate(() => ({
     lang: p.querySelector(".panel-title")?.textContent,
     status: p.querySelector(".panel-status")?.textContent ?? "",
     error: p.querySelector(".panel-error")?.textContent ?? "",
-    current: p.querySelector(".caption.is-current")?.textContent ?? "",
-    previous: p.querySelector(".caption.is-previous")?.textContent ?? "",
+    past: p.querySelectorAll(".caption.is-past").length,
+    current: (p.querySelector(".caption.is-current")?.textContent ?? "").slice(0, 40),
   })),
-  source: document.querySelector(".source-text")?.textContent ?? "",
+  source: (document.querySelector(".source-text")?.textContent ?? "").slice(0, 60),
   gum: window.__probe.gum,
   peers: window.__probe.peers.length,
   openPeers: window.__probe.peers.filter((p) => !p.closed).length,
-  peerStates: window.__probe.peers.map((p) => p.self.connectionState),
-  muted: window.__probe.audios.filter((a) => a.srcObject).map((a) => a.muted),
+  // Áudio traduzido nunca pode ser reproduzido: esta é uma ferramenta de legenda.
+  playingAudio: window.__probe.audios.filter((a) => a.srcObject && !a.paused).length,
 }));
 
 const click = (text) =>
@@ -152,12 +152,6 @@ await wait(12000);
 await step("+italiano", state);
 await page.screenshot({ path: `${OUT}/03-dois-idiomas.png` });
 
-await page.evaluate(() => {
-  const it = [...document.querySelectorAll(".panel")].find((p) => p.querySelector(".panel-title")?.textContent === "ITALIANO");
-  [...(it?.querySelectorAll("button") ?? [])].find((b) => b.textContent.includes("Ouvir"))?.click();
-});
-await wait(1500);
-await step("ouvir italiano", state);
 
 // Menu de leitura: fonte, tamanho e organização.
 await openMenu("reading");
@@ -206,9 +200,23 @@ await page.click('[data-pause-toggle]');
 await wait(8000);
 await step("retomado", state);
 
+// Esconder o italiano não pode apagar o que ele já traduziu.
+const italianBefore = await page.evaluate(() => {
+  const p = document.querySelector('[data-panel="it"]');
+  return [...p.querySelectorAll(".caption")].map((c) => c.textContent).join(" | ");
+});
 await toggleLanguageInMenu("it");
-await wait(4000);
-await step("-italiano", state);
+await wait(3000);
+const hidden = await step("italiano escondido", state);
+// E marcar de volta traz o texto intacto.
+await toggleLanguageInMenu("it");
+await wait(3000);
+const italianAfter = await page.evaluate(() => {
+  const p = document.querySelector('[data-panel="it"]');
+  return p ? [...p.querySelectorAll(".caption")].map((c) => c.textContent).join(" | ") : "";
+});
+await step("italiano de volta", state);
+await page.screenshot({ path: `${OUT}/05-italiano-de-volta.png` });
 
 await page.setViewport({ width: 414, height: 896, deviceScaleFactor: 2 });
 await wait(5000);
@@ -217,7 +225,26 @@ await page.setViewport({ width: 1600, height: 1000 });
 
 // `gum` precisa ser medido AINDA na sessão: ao parar, a tela inicial religa
 // a prévia do microfone e capturar de novo ali é o comportamento correto.
-const liveGum = (await state()).gum;
+// Trecho atual preto, trechos fechados cinza, e a área rolada até o fim.
+const captionStyle = await page.evaluate(() => {
+  const body = document.querySelector(".panel-body");
+  const color = (sel) => {
+    const el = document.querySelector(sel);
+    return el ? getComputedStyle(el).color : null;
+  };
+  return {
+    past: color(".caption.is-past"),
+    current: color(".caption.is-current"),
+    distanceFromBottom: body
+      ? body.scrollHeight - body.scrollTop - body.clientHeight
+      : null,
+  };
+});
+console.log("estilo da legenda".padEnd(22), JSON.stringify(captionStyle));
+
+const live = await state();
+const liveGum = live.gum;
+if (live.playingAudio > 0) console.error("ALERTA: áudio traduzido tocando");
 await page.click('[data-action="stop"]');
 await wait(2000);
 const stopped = await step("parado", state);
@@ -243,6 +270,13 @@ if (paused.openPeers !== 0) failures.push("pausa não fechou as sessões");
 if (beforePause !== afterPause) failures.push("pausa perdeu o texto da legenda");
 if (history.count < 1) failures.push("sessão não foi gravada no histórico");
 if (readingApplied?.arrangement !== "rows") failures.push("organização não aplicou");
+if (hidden.panels.some((p) => p.lang === "ITALIANO")) failures.push("idioma desmarcado continuou visível");
+if (!italianAfter.startsWith(italianBefore)) failures.push("texto do idioma se perdeu ao esconder/reexibir");
+if (stopped.playingAudio > 0) failures.push("áudio traduzido foi reproduzido");
+if (captionStyle.past && captionStyle.past === captionStyle.current) {
+  failures.push("trecho antigo tem a mesma cor do atual");
+}
+if (captionStyle.distanceFromBottom > 4) failures.push("legenda não rolou até o fim");
 if (!readingApplied?.font?.includes("Source")) failures.push("troca de fonte não aplicou");
 if (Number(readingApplied?.scale) <= 1) failures.push("aumento de fonte não aplicou");
 if (!history.durationMs) failures.push("histórico sem duração");

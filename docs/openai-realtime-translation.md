@@ -356,6 +356,20 @@ mesma track em peer connections diferentes; cada PC cria seu próprio
 
 ---
 
+## 7.1 O áudio traduzido não é opcional
+
+Verificado contra a API em 2026-09-13, numa aplicação que só quer legenda:
+
+| Transceiver | Conexão | Remote tracks | Transcript |
+|---|---|---|---|
+| `addTrack` (sendrecv, padrão) | `connected` | 1 | chega normalmente |
+| `addTransceiver(..., { direction: "sendonly" })` | `connected` | 0 | **nada** |
+
+Ou seja: recusar a track de áudio traduzido para economizar banda **desliga a
+legenda junto**, e de forma silenciosa — a conexão continua saudável e nenhum
+erro é emitido. Quem quer só legenda precisa receber o áudio e simplesmente não
+reproduzi-lo.
+
 ## 8. Ciclo de vida, encerramento e reconexão
 
 - **WebSocket:** enviar `session.close`, **continuar lendo eventos** até receber

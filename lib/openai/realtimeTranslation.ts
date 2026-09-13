@@ -57,9 +57,6 @@ export interface TranslationSessionOptions extends TranslationSessionCallbacks {
    * dele para escrever o msid no SDP, como faz o demo oficial da OpenAI.
    */
   getStream: () => MediaStream | null;
-  /** Começa audível? Por padrão só um idioma começa com som. */
-  audible: boolean;
-  volume: number;
   tokenEndpoint?: string;
 }
 
@@ -77,7 +74,6 @@ export class TranslationSession {
   #pc: RTCPeerConnection | null = null;
   #dc: RTCDataChannel | null = null;
   #sender: RTCRtpSender | null = null;
-  #audio: HTMLAudioElement | null = null;
 
   #status: SessionStatus = "idle";
   #disposed = false;
@@ -87,17 +83,12 @@ export class TranslationSession {
   #reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   #disconnectedTimer: ReturnType<typeof setTimeout> | null = null;
 
-  #muted: boolean;
-  #volume: number;
-
   #diagnostics: TranslationSessionDiagnostics;
   #connectStartedAt = 0;
 
   constructor(options: TranslationSessionOptions) {
     this.#options = options;
     this.targetLanguage = options.targetLanguage;
-    this.#muted = !options.audible;
-    this.#volume = options.volume;
     this.#diagnostics = {
       targetLanguage: options.targetLanguage,
       sessionId: null,
@@ -161,7 +152,6 @@ export class TranslationSession {
       this.#attachDataChannelHandlers(dc, generation);
 
       this.#sender = pc.addTrack(track, stream);
-      this.#ensureAudioElement();
 
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
@@ -241,11 +231,6 @@ export class TranslationSession {
     }
     this.#sender = null;
 
-    if (this.#audio) {
-      this.#audio.pause();
-      this.#audio.srcObject = null;
-    }
-
     this.#diagnostics.connectionState = "new";
     this.#diagnostics.dataChannelState = "none";
     this.#emitDiagnostics();
@@ -260,40 +245,6 @@ export class TranslationSession {
       clearTimeout(this.#disconnectedTimer);
       this.#disconnectedTimer = null;
     }
-  }
-
-  /* ---------------------------------------------------------------- */
-  /* Áudio traduzido                                                  */
-  /* ---------------------------------------------------------------- */
-
-  #ensureAudioElement(): HTMLAudioElement {
-    if (!this.#audio) {
-      const audio = new Audio();
-      audio.autoplay = true;
-      // `playsInline` evita que o iOS abra o player em tela cheia.
-      (audio as HTMLAudioElement & { playsInline?: boolean }).playsInline = true;
-      this.#audio = audio;
-    }
-    this.#audio.muted = this.#muted;
-    this.#audio.volume = this.#volume;
-    return this.#audio;
-  }
-
-  setMuted(muted: boolean): void {
-    this.#muted = muted;
-    if (this.#audio) {
-      this.#audio.muted = muted;
-      if (!muted) void this.#audio.play().catch(() => undefined);
-    }
-  }
-
-  setVolume(volume: number): void {
-    this.#volume = volume;
-    if (this.#audio) this.#audio.volume = volume;
-  }
-
-  get muted(): boolean {
-    return this.#muted;
   }
 
   /** Troca a fonte de áudio sem derrubar a sessão (ex.: outro microfone). */
@@ -338,19 +289,20 @@ export class TranslationSession {
       this.#emitDiagnostics();
     };
 
-    pc.ontrack = ({ streams }) => {
+    /**
+     * A track de áudio traduzido é recebida mas nunca reproduzida: esta é uma
+     * ferramenta de legenda. Ela não pode ser recusada — verificado contra a
+     * API, um transceiver `sendonly` conecta mas **não produz transcript
+     * nenhum**. O áudio é o que carrega a legenda; simplesmente não o tocamos.
+     */
+    pc.ontrack = () => {
       if (this.#isStale(generation)) return;
-      const audio = this.#ensureAudioElement();
-      audio.srcObject = streams[0] ?? null;
       if (this.#diagnostics.firstAudioMs === null) {
         this.#diagnostics.firstAudioMs = Math.round(
           performance.now() - this.#connectStartedAt,
         );
       }
-      void audio.play().catch((error: unknown) => {
-        this.#log("audio.play", messageOf(error));
-      });
-      this.#log("remote.audio", "track recebida");
+      this.#log("remote.audio", "track recebida (não reproduzida)");
       this.#emitDiagnostics();
     };
   }

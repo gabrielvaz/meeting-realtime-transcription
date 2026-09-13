@@ -7,7 +7,6 @@ import type { LanguageTrack } from "@/hooks/useRealtimeTranslation";
 import { getCaptionFont, type CaptionFontId } from "@/lib/fonts";
 import type { SubtitleSnapshot } from "@/lib/subtitleBuffer";
 import type { ReadingPreferences } from "@/lib/transcriptLog";
-import type { TargetLanguageCode } from "@/types/realtime";
 
 interface TranslationDisplayProps {
   tracks: LanguageTrack[];
@@ -15,10 +14,6 @@ interface TranslationDisplayProps {
   sourceActive: boolean;
   paused: boolean;
   preferences: ReadingPreferences;
-  showAudioControls: boolean;
-  onListen: (language: TargetLanguageCode) => void;
-  onToggleMute: (language: TargetLanguageCode, muted: boolean) => void;
-  onVolume: (language: TargetLanguageCode, volume: number) => void;
 }
 
 export function TranslationDisplay({
@@ -27,10 +22,6 @@ export function TranslationDisplay({
   sourceActive,
   paused,
   preferences,
-  showAudioControls,
-  onListen,
-  onToggleMute,
-  onVolume,
 }: TranslationDisplayProps) {
   // O tamanho base da legenda vem da quantidade de idiomas; a organização é
   // escolha do usuário e só muda o grid, não a escala.
@@ -50,11 +41,17 @@ export function TranslationDisplay({
             Original — detecção automática
           </h2>
           <p className="source-text mt-1.5 leading-[1.45] text-muted-foreground">
-            {sourceSubtitle.previous ? (
-              <span className="opacity-45">{sourceSubtitle.previous} </span>
+            {sourceSubtitle.segments.length ? (
+              <span className="opacity-45">
+                {sourceSubtitle.segments[sourceSubtitle.segments.length - 1]}{" "}
+              </span>
             ) : null}
             {sourceSubtitle.current ||
-              (sourceSubtitle.previous ? "" : paused ? "Pausado" : "Aguardando fala")}
+              (sourceSubtitle.segments.length
+                ? ""
+                : paused
+                  ? "Pausado"
+                  : "Aguardando fala")}
           </p>
         </section>
       ) : null}
@@ -71,10 +68,6 @@ export function TranslationDisplay({
             track={track}
             paused={paused}
             sourceActive={sourceActive}
-            showAudioControls={showAudioControls}
-            onListen={onListen}
-            onToggleMute={onToggleMute}
-            onVolume={onVolume}
           />
         ))}
       </div>
