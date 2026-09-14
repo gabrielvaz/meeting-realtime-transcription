@@ -1,25 +1,22 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
+import { SplitHandle, type SplitEdge } from "@/components/SplitHandle";
 import { TranslationDisplay } from "@/components/TranslationDisplay";
 import type { Deck } from "@/lib/deck";
 import type { LanguageTrack } from "@/hooks/useRealtimeTranslation";
 import type { SubtitleSnapshot } from "@/lib/subtitleBuffer";
-import type { ReadingPreferences } from "@/lib/transcriptLog";
+import { DEFAULT_PREFERENCES, type ReadingPreferences } from "@/lib/transcriptLog";
 
-type Band = ReadingPreferences["captionBand"];
+type Layout = ReadingPreferences["captionLayout"];
+type SizedLayout = Exclude<Layout, "hidden">;
 
-const HEIGHT: Record<Band, string> = {
-  small: "clamp(110px, 20vh, 220px)",
-  medium: "clamp(150px, 30vh, 340px)",
-  large: "clamp(200px, 42vh, 520px)",
-};
-
-const WIDTH: Record<Band, string> = {
-  small: "clamp(220px, 22vw, 340px)",
-  medium: "clamp(300px, 32vw, 520px)",
-  large: "clamp(380px, 44vw, 720px)",
+const EDGE: Record<SizedLayout, SplitEdge> = {
+  bottom: "bottom",
+  top: "top",
+  right: "right",
+  overlay: "bottom",
 };
 
 interface PresentationStageProps {
@@ -29,11 +26,16 @@ interface PresentationStageProps {
   sourceActive: boolean;
   paused: boolean;
   preferences: ReadingPreferences;
+  onPreferences: (patch: Partial<ReadingPreferences>) => void;
 }
 
 /**
  * Modo apresentação: os slides ocupam a tela e as legendas vão para onde o
  * usuário mandar — embaixo, em cima, na lateral, sobrepostas ou escondidas.
+ *
+ * A divisa entre as duas áreas é arrastável em todos os layouts, e o tamanho é
+ * guardado por layout. Durante o arrasto o tamanho vive em estado local e só
+ * vai para o `localStorage` ao soltar.
  *
  * O HTML do usuário roda num iframe de **origem opaca** (`allow-scripts` sem
  * `allow-same-origin`): os slides continuam interativos — setas do teclado,
@@ -47,9 +49,17 @@ export function PresentationStage({
   sourceActive,
   paused,
   preferences,
+  onPreferences,
 }: PresentationStageProps) {
   const frameRef = useRef<HTMLIFrameElement>(null);
+  const stageRef = useRef<HTMLElement>(null);
+  const [dragging, setDragging] = useState(false);
+  /** Tamanho durante o arrasto; `null` quando vale o que está salvo. */
+  const [live, setLive] = useState<number | null>(null);
+
   const layout = preferences.captionLayout;
+  const sized = layout !== "hidden" ? (layout as SizedLayout) : null;
+  const size = sized ? (live ?? preferences.bandSize[sized]) : 0;
 
   // As setas do teclado precisam chegar aos slides, não à página.
   useEffect(() => {
@@ -57,6 +67,38 @@ export function PresentationStage({
     const timer = window.setTimeout(() => frame?.focus(), 300);
     return () => window.clearTimeout(timer);
   }, [deck]);
+
+  const commit = useCallback(
+    (value: number) => {
+      if (!sized) return;
+      setLive(null);
+      onPreferences({ bandSize: { ...preferences.bandSize, [sized]: value } });
+    },
+    [onPreferences, preferences.bandSize, sized],
+  );
+
+  const reset = useCallback(() => {
+    if (!sized) return;
+    setLive(null);
+    onPreferences({
+      bandSize: {
+        ...preferences.bandSize,
+        [sized]: DEFAULT_PREFERENCES.bandSize[sized],
+      },
+    });
+  }, [onPreferences, preferences.bandSize, sized]);
+
+  const handle = sized ? (
+    <SplitHandle
+      edge={EDGE[sized]}
+      value={size}
+      containerRef={stageRef}
+      onChange={setLive}
+      onCommit={commit}
+      onReset={reset}
+      onDraggingChange={setDragging}
+    />
+  ) : null;
 
   const captions = (
     <TranslationDisplay
@@ -80,6 +122,10 @@ export function PresentationStage({
         sobre preto. Não dá para reestilizar o documento do usuário — ele é de
         outra origem —, então garantimos o que o autor dele assumiu. Deck que
         define o próprio fundo pinta por cima.
+
+        `pointerEvents: none` durante o arrasto é reforço: a captura de ponteiro
+        já mantém os eventos no divisor, mas sem isto o cursor pisca ao cruzar
+        a borda do iframe.
       */}
       <iframe
         ref={frameRef}
@@ -87,7 +133,11 @@ export function PresentationStage({
         title={`Slides: ${deck.name}`}
         data-deck-frame=""
         className="size-full border-0"
-        style={{ background: "#ffffff", colorScheme: "light" }}
+        style={{
+          background: "#ffffff",
+          colorScheme: "light",
+          pointerEvents: dragging ? "none" : undefined,
+        }}
         sandbox="allow-scripts allow-popups allow-forms allow-modals"
         allow="fullscreen"
       />
@@ -96,7 +146,7 @@ export function PresentationStage({
 
   if (layout === "hidden") {
     return (
-      <main className="flex min-h-0 flex-1 flex-col" data-layout="hidden">
+      <main ref={stageRef} className="flex min-h-0 flex-1 flex-col" data-layout="hidden">
         {slides}
       </main>
     );
@@ -104,14 +154,19 @@ export function PresentationStage({
 
   if (layout === "overlay") {
     return (
-      <main className="relative flex min-h-0 flex-1 flex-col" data-layout="overlay">
+      <main
+        ref={stageRef}
+        className="relative flex min-h-0 flex-1 flex-col"
+        data-layout="overlay"
+      >
         {slides}
         <div
           className="absolute inset-x-0 bottom-0 flex flex-col border-t border-border"
-          style={{ height: HEIGHT[preferences.captionBand] }}
+          style={{ height: `${size}%` }}
           data-caption-band=""
           data-caption-overlay=""
         >
+          {handle}
           {captions}
         </div>
       </main>
@@ -120,11 +175,12 @@ export function PresentationStage({
 
   if (layout === "right") {
     return (
-      <main className="flex min-h-0 flex-1 flex-row" data-layout="right">
+      <main ref={stageRef} className="flex min-h-0 flex-1 flex-row" data-layout="right">
         {slides}
+        {handle}
         <div
           className="flex flex-none flex-col border-l border-border"
-          style={{ width: WIDTH[preferences.captionBand] }}
+          style={{ width: `${size}%` }}
           data-caption-band=""
         >
           {captions}
@@ -138,7 +194,7 @@ export function PresentationStage({
       className={`flex flex-none flex-col ${
         layout === "top" ? "border-b" : "border-t"
       } border-border`}
-      style={{ height: HEIGHT[preferences.captionBand] }}
+      style={{ height: `${size}%` }}
       data-caption-band=""
     >
       {captions}
@@ -146,9 +202,11 @@ export function PresentationStage({
   );
 
   return (
-    <main className="flex min-h-0 flex-1 flex-col" data-layout={layout}>
+    <main ref={stageRef} className="flex min-h-0 flex-1 flex-col" data-layout={layout}>
       {layout === "top" ? band : null}
+      {layout === "top" ? handle : null}
       {slides}
+      {layout === "bottom" ? handle : null}
       {layout === "bottom" ? band : null}
     </main>
   );

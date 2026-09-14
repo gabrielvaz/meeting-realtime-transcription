@@ -141,6 +141,56 @@ await wait(250);
 await page.keyboard.press("Escape");
 await wait(450);
 
+// --- Arrastar a divisa entre slides e legendas ---
+const geometry = () =>
+  page.evaluate(() => {
+    const rect = (sel) => {
+      const el = document.querySelector(sel);
+      if (!el) return null;
+      const r = el.getBoundingClientRect();
+      return { x: Math.round(r.x), y: Math.round(r.y), w: Math.round(r.width), h: Math.round(r.height) };
+    };
+    return { band: rect("[data-caption-band]"), slides: rect("[data-deck-frame]"), handle: rect("[data-split-handle]") };
+  });
+
+const setLayout = async (id) => {
+  await page.click('[data-menu="layout"]');
+  await wait(320);
+  await page.click(`[data-layout-option="${id}"]`);
+  await wait(200);
+  await page.keyboard.press("Escape");
+  await wait(450);
+};
+
+const drags = {};
+for (const [id, dx, dy] of [["bottom", 0, -180], ["top", 0, 150], ["right", -260, 0], ["overlay", 0, -120]]) {
+  await setLayout(id);
+  const before = await geometry();
+  const h = before.handle;
+  if (!h) {
+    drags[id] = { error: "sem divisor" };
+    continue;
+  }
+  await page.mouse.move(h.x + h.w / 2, h.y + h.h / 2);
+  await page.mouse.down();
+  // Passos intermediários: um salto único não gera `pointermove` suficiente.
+  for (let i = 1; i <= 6; i += 1) {
+    await page.mouse.move(h.x + h.w / 2 + (dx * i) / 6, h.y + h.h / 2 + (dy * i) / 6);
+    await wait(30);
+  }
+  await page.mouse.up();
+  await wait(400);
+  const after = await geometry();
+  const dim = id === "right" ? "w" : "h";
+  drags[id] = { before: before.band[dim], after: after.band[dim], slidesBefore: before.slides[dim], slidesAfter: after.slides[dim] };
+}
+const savedSizes = await page.evaluate(
+  () => JSON.parse(localStorage.getItem("live-translation:preferences")).bandSize,
+);
+console.log("arrasto", JSON.stringify({ drags, savedSizes }, null, 2));
+
+await setLayout("bottom");
+
 const band = await page.evaluate(() => {
   const el = document.querySelector("[data-caption-band]");
   return {
@@ -174,6 +224,28 @@ if (distinctThemes.size !== Object.keys(themes).length) {
   failures.push(`temas com cores repetidas: ${JSON.stringify(themes)}`);
 }
 
+// Arrastar tem de mexer na geometria e gravar, em todos os layouts.
+for (const [id, result] of Object.entries(drags)) {
+  if (result.error) {
+    failures.push(`layout ${id}: ${result.error}`);
+    continue;
+  }
+  if (Math.abs(result.after - result.before) < 40) {
+    failures.push(`arrastar não redimensionou em ${id} (${result.before} → ${result.after})`);
+  }
+  // Sobreposta, a faixa cresce por cima: os slides não podem encolher.
+  const slidesChanged = result.slidesBefore !== result.slidesAfter;
+  if (id === "overlay" && slidesChanged) {
+    failures.push("sobreposição encolheu os slides");
+  }
+  if (id !== "overlay" && !slidesChanged) {
+    failures.push(`os slides não cederam espaço em ${id}`);
+  }
+}
+for (const [id, size] of Object.entries(savedSizes)) {
+  if (typeof size !== "number" || size <= 0) failures.push(`tamanho de ${id} não foi salvo`);
+}
+
 for (const [id, result] of Object.entries(layouts)) {
   if (result.applied !== id) failures.push(`layout ${id} não foi aplicado`);
 }
@@ -191,6 +263,7 @@ if (layouts.overlay.slides.h <= layouts.bottom.slides.h) {
   failures.push("layout 'sobre os slides' não deixou os slides em tela cheia");
 }
 // A legenda mede pelo contêiner: na lateral estreita ela precisa encolher.
+// (As medidas de layout são tomadas antes dos arrastos, com os tamanhos padrão.)
 if (!(layouts.right.captionPx < layouts.bottom.captionPx)) {
   failures.push(
     `legenda não encolheu na lateral (${layouts.right.captionPx}px vs ${layouts.bottom.captionPx}px)`,

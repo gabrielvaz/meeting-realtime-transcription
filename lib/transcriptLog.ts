@@ -168,8 +168,14 @@ export interface ReadingPreferences {
   /** Multiplicador aplicado sobre o tamanho base da legenda. */
   scale: number;
   arrangement: "auto" | "columns" | "rows" | "grid";
-  /** Altura da faixa de legendas no modo apresentação. */
-  captionBand: "small" | "medium" | "large";
+  /**
+   * Tamanho da faixa de legendas por layout, em **porcentagem** do palco.
+   *
+   * Porcentagem e não pixels: o mesmo ajuste precisa valer no notebook e no
+   * projetor, que têm resoluções diferentes. E um valor por layout porque a
+   * faixa sobreposta costuma ser mais fina que a faixa de baixo.
+   */
+  bandSize: { bottom: number; top: number; right: number; overlay: number };
   /** Legendas em tela cheia, ou slides com as legendas numa faixa. */
   mode: "captions" | "presentation";
   /** Onde as legendas ficam em relação aos slides. */
@@ -182,7 +188,7 @@ export const DEFAULT_PREFERENCES: ReadingPreferences = {
   fontId: "inter",
   scale: 1,
   arrangement: "auto",
-  captionBand: "medium",
+  bandSize: { bottom: 30, top: 30, right: 32, overlay: 26 },
   mode: "captions",
   captionLayout: "bottom",
   theme: "light",
@@ -190,7 +196,14 @@ export const DEFAULT_PREFERENCES: ReadingPreferences = {
 };
 
 export function loadPreferences(): ReadingPreferences {
-  return { ...DEFAULT_PREFERENCES, ...readRaw(PREFERENCES_KEY, {}) };
+  const stored = readRaw<Partial<ReadingPreferences>>(PREFERENCES_KEY, {});
+  return {
+    ...DEFAULT_PREFERENCES,
+    ...stored,
+    // `bandSize` é objeto: espalhar por cima perderia as chaves que uma
+    // versão anterior ainda não gravava.
+    bandSize: { ...DEFAULT_PREFERENCES.bandSize, ...(stored.bandSize ?? {}) },
+  };
 }
 
 export function savePreferences(preferences: ReadingPreferences): void {

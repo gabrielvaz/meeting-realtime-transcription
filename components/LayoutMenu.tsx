@@ -22,10 +22,14 @@ const LAYOUTS: ReadonlyArray<{ id: Layout; label: string; note: string }> = [
   { id: "hidden", label: "Ocultar", note: "Só os slides. A tradução continua rodando." },
 ];
 
-const SIZES: ReadonlyArray<{ id: ReadingPreferences["captionBand"]; label: string }> = [
-  { id: "small", label: "Pequena" },
-  { id: "medium", label: "Média" },
-  { id: "large", label: "Grande" },
+/**
+ * Atalhos de tamanho. O ajuste fino é arrastando a divisa entre os slides e as
+ * legendas; estes três só levam a faixa para um ponto conhecido em um clique.
+ */
+const PRESETS: ReadonlyArray<{ id: string; label: string; percent: number }> = [
+  { id: "small", label: "Pequena", percent: 18 },
+  { id: "medium", label: "Média", percent: 30 },
+  { id: "large", label: "Grande", percent: 45 },
 ];
 
 const ARRANGEMENTS: ReadonlyArray<{
@@ -43,6 +47,8 @@ interface LayoutMenuProps {
   onChange: (patch: Partial<ReadingPreferences>) => void;
 }
 
+type SizedLayout = Exclude<ReadingPreferences["captionLayout"], "hidden">;
+
 /**
  * Onde as legendas ficam durante a apresentação.
  *
@@ -51,6 +57,11 @@ interface LayoutMenuProps {
  */
 export function LayoutMenu({ preferences, onChange }: LayoutMenuProps) {
   const hidden = preferences.captionLayout === "hidden";
+  const sized = preferences.captionLayout as SizedLayout;
+  const current = hidden ? 0 : preferences.bandSize[sized];
+
+  const setSize = (percent: number) =>
+    onChange({ bandSize: { ...preferences.bandSize, [sized]: percent } });
 
   return (
     <DropdownMenu>
@@ -85,26 +96,35 @@ export function LayoutMenu({ preferences, onChange }: LayoutMenuProps) {
         {hidden ? null : (
           <>
             <DropdownMenuSeparator />
-            <DropdownMenuLabel className="text-[11px] uppercase tracking-[0.08em] text-muted-foreground">
-              {preferences.captionLayout === "right" ? "Largura" : "Altura"}
+            <DropdownMenuLabel className="flex items-baseline justify-between text-[11px] uppercase tracking-[0.08em] text-muted-foreground">
+              <span>{preferences.captionLayout === "right" ? "Largura" : "Altura"}</span>
+              <span className="tabular-nums" data-band-size="">
+                {Math.round(current)}%
+              </span>
             </DropdownMenuLabel>
-            <DropdownMenuRadioGroup
-              value={preferences.captionBand}
-              onValueChange={(value) =>
-                onChange({ captionBand: value as ReadingPreferences["captionBand"] })
-              }
-            >
-              {SIZES.map((size) => (
-                <DropdownMenuRadioItem
-                  key={size.id}
-                  value={size.id}
-                  data-band={size.id}
-                  onSelect={(event) => event.preventDefault()}
+            <div className="flex gap-1.5 px-2 pb-2">
+              {PRESETS.map((preset) => (
+                <Button
+                  key={preset.id}
+                  variant="outline"
+                  size="sm"
+                  data-band={preset.id}
+                  className={`h-7 flex-1 text-xs ${
+                    Math.round(current) === preset.percent ? "border-foreground" : ""
+                  }`}
+                  onClick={(event) => {
+                    event.preventDefault();
+                    setSize(preset.percent);
+                  }}
                 >
-                  {size.label}
-                </DropdownMenuRadioItem>
+                  {preset.label}
+                </Button>
               ))}
-            </DropdownMenuRadioGroup>
+            </div>
+            <p className="px-2 pb-2 text-[11px] leading-relaxed text-muted-foreground">
+              Ou arraste a divisa entre os slides e as legendas. Duplo clique nela
+              volta ao padrão.
+            </p>
 
             <DropdownMenuSeparator />
             <DropdownMenuLabel className="text-[11px] uppercase tracking-[0.08em] text-muted-foreground">

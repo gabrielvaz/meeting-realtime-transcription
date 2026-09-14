@@ -28,25 +28,17 @@ const ARRANGEMENTS: ReadonlyArray<{
   { id: "grid", label: "Grade", note: "Blocos que quebram conforme a tela." },
 ];
 
-const BANDS: ReadonlyArray<{ id: ReadingPreferences["captionBand"]; label: string }> = [
-  { id: "small", label: "Baixa" },
-  { id: "medium", label: "Média" },
-  { id: "large", label: "Alta" },
-];
-
 interface ReadingMenuProps {
   preferences: ReadingPreferences;
   onChange: (patch: Partial<ReadingPreferences>) => void;
-  /** No modo apresentação aparece o controle de altura da faixa. */
-  showBandHeight?: boolean;
 }
 
 /** Controles de leitura: tamanho, fonte e organização das legendas. */
-export function ReadingMenu({
-  preferences,
-  onChange,
-  showBandHeight,
-}: ReadingMenuProps) {
+/**
+ * Leitura no modo de legendas em tela cheia. No modo apresentação quem manda é
+ * o `LayoutMenu`, que também controla a divisa entre slides e legendas.
+ */
+export function ReadingMenu({ preferences, onChange }: ReadingMenuProps) {
   const setScale = (next: number) =>
     onChange({ scale: Math.min(SCALE_MAX, Math.max(SCALE_MIN, Number(next.toFixed(2)))) });
 
@@ -140,31 +132,6 @@ export function ReadingMenu({
             </DropdownMenuRadioItem>
           ))}
         </DropdownMenuRadioGroup>
-        {showBandHeight ? (
-          <>
-            <DropdownMenuSeparator />
-            <DropdownMenuLabel className="text-[11px] uppercase tracking-[0.08em] text-muted-foreground">
-              Altura das legendas
-            </DropdownMenuLabel>
-            <DropdownMenuRadioGroup
-              value={preferences.captionBand}
-              onValueChange={(value) =>
-                onChange({ captionBand: value as ReadingPreferences["captionBand"] })
-              }
-            >
-              {BANDS.map((band) => (
-                <DropdownMenuRadioItem
-                  key={band.id}
-                  value={band.id}
-                  data-band={band.id}
-                  onSelect={(event) => event.preventDefault()}
-                >
-                  {band.label}
-                </DropdownMenuRadioItem>
-              ))}
-            </DropdownMenuRadioGroup>
-          </>
-        ) : null}
       </DropdownMenuContent>
     </DropdownMenu>
   );

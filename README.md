@@ -293,11 +293,26 @@ o slide muda, o texto atrapalha, você tira da frente:
 | Abaixo dos slides | faixa na parte inferior (padrão) |
 | Acima dos slides | faixa na parte superior |
 | Na lateral direita | coluna ao lado, para slides em retrato |
-| Sobre os slides | sobreposta, com fundo translúcido; os slides ficam em tela cheia |
+| Sobre os slides | sobreposta, com fundo translúcido; os slides ficam em tela cheia e **não** encolhem ao redimensionar |
 | Ocultar | só os slides. **A tradução continua rodando** e indo para o histórico |
 
-No mesmo menu: altura (ou largura, na lateral) em três posições, e a organização
-quando há vários idiomas.
+No mesmo menu: três atalhos de tamanho e a organização quando há vários idiomas.
+
+**A divisa entre os slides e as legendas é arrastável em todos os layouts**, e o
+tamanho é guardado por layout — a faixa sobreposta costuma querer ser mais fina
+que a de baixo. Duplo clique na divisa volta ao padrão; com ela focada, as setas
+ajustam de 2 em 2% (5 em 5 com Shift).
+
+Dois detalhes separam isso de funcionar pela metade:
+
+- **`setPointerCapture` no divisor.** Sem ele o ponteiro entra no iframe dos
+  slides no primeiro pixel de arrasto e os eventos somem — o documento de dentro
+  é de outra origem e fica com eles. Verificado arrastando por cima dos slides.
+- **Gravar só no `pointerup`.** A cada movimento seriam dezenas de escritas por
+  segundo no `localStorage`; durante o arrasto o tamanho vive em estado local.
+
+O tamanho é guardado em **porcentagem do palco**, não em pixels: o mesmo ajuste
+precisa valer no notebook e no projetor.
 
 O tamanho do texto é calculado pelo **contêiner**, não pela viewport
 (`container-type: inline-size` + unidades `cqi`). Sem isso a legenda na coluna
@@ -456,8 +471,12 @@ npm run test:glossary   # 47 casos, incluindo os negativos
 ```
 
 ```bash
-npm run test:presentation   # isolamento do iframe, slides, temas e layouts
+npm run test:presentation   # isolamento, slides, temas, layouts e arrasto
 ```
+
+Medido nos quatro layouts, arrastando: faixa 285→468 e slides 660→477 embaixo;
+512→775 e 1082→819 na lateral; e na sobreposição a faixa cresce de 247→363 com
+os slides intactos em 951.
 
 ## Chave do usuário
 
@@ -546,6 +565,7 @@ components/
   DeckPicker.tsx                 upload do HTML dos slides
   PresentationStage.tsx          iframe isolado + os cinco layouts de legenda
   LayoutMenu.tsx                 posição, tamanho e organização das legendas
+  SplitHandle.tsx                divisor arrastável entre slides e legendas
   AppearanceSettings.tsx         tema, fonte e tamanho do texto
   TranslationDisplay.tsx         grid responsivo + transcrição original
   TranslationPanel.tsx           uma região de legenda + controles de áudio

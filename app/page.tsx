@@ -250,6 +250,7 @@ export default function Page() {
             sourceActive={translation.sourceActive}
             paused={paused}
             preferences={preferences}
+            onPreferences={updatePreferences}
           />
         ) : (
           <TranslationDisplay
