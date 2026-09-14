@@ -20,6 +20,8 @@ interface SessionControlsProps {
   selected: readonly TargetLanguageCode[];
   reconnecting: boolean;
   paused: boolean;
+  /** Tradução encerrada, mas o texto segue em tela. */
+  stopped: boolean;
   showOriginal: boolean;
   preferences: ReadingPreferences;
   glossary: GlossaryEntry[];
@@ -34,6 +36,7 @@ interface SessionControlsProps {
   onTogglePause: () => void;
   onClear: () => void;
   onStop: () => void;
+  onClose: () => void;
 }
 
 /** Barra discreta exibida durante a tradução. */
@@ -42,6 +45,7 @@ export function SessionControls({
   selected,
   reconnecting,
   paused,
+  stopped,
   showOriginal,
   preferences,
   glossary,
@@ -55,30 +59,57 @@ export function SessionControls({
   onTogglePause,
   onClear,
   onStop,
+  onClose,
 }: SessionControlsProps) {
-  const label = paused
-    ? "Pausado"
-    : reconnecting
-      ? "Reconectando"
-      : "Traduzindo ao vivo";
+  const label = stopped
+    ? "Transcrição encerrada"
+    : paused
+      ? "Pausado"
+      : reconnecting
+        ? "Reconectando"
+        : "Traduzindo ao vivo";
 
   return (
     <header className="live-bar flex flex-none flex-wrap items-center gap-x-4 gap-y-2 border-b border-border px-5 py-2.5 text-xs text-muted-foreground">
       <span
         className={`size-[7px] flex-none rounded-full ${
-          paused || reconnecting ? "bg-muted-foreground" : "bg-foreground"
-        }`}
+          stopped ? "border border-muted-foreground" : ""
+        } ${paused || reconnecting ? "bg-muted-foreground" : stopped ? "" : "bg-foreground"}`}
         aria-hidden="true"
       />
       <span className="uppercase tracking-[0.08em] text-foreground">{label}</span>
+      {/* Relógio e transporte juntos: são a mesma decisão — quanto tempo já
+          corre e o que fazer com ele. */}
       <time className="live-clock tabular-nums text-foreground">
         {formatClock(elapsedSeconds)}
       </time>
+      {stopped ? null : (
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-7 text-xs"
+            data-pause-toggle=""
+            onClick={onTogglePause}
+          >
+            {paused ? "Retomar" : "Pausar"}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-7 text-xs"
+            data-action="stop"
+            onClick={onStop}
+          >
+            Parar
+          </Button>
+        </div>
+      )}
 
       {/* A onda fica visível na sessão inteira: é a resposta para "o microfone
           está me ouvindo?" sem precisar abrir nada. Pausado, ela cai para a
           linha de base, porque a captura realmente para. */}
-      <AudioWaveform stream={paused ? null : stream} width={112} height={22} />
+      <AudioWaveform stream={paused || stopped ? null : stream} width={112} height={22} />
 
       <span className="min-w-0 flex-1 truncate">
         {selected.map((code) => getLanguage(code).label).join(" · ")}
@@ -155,24 +186,23 @@ export function SessionControls({
           confirmLabel="Limpar"
           onConfirm={onClear}
         />
-        <Button
-          variant="outline"
-          size="sm"
-          className="h-7 text-xs"
-          data-pause-toggle=""
-          onClick={onTogglePause}
-        >
-          {paused ? "Retomar" : "Pausar"}
-        </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          className="h-7 text-xs"
-          data-action="stop"
-          onClick={onStop}
-        >
-          Parar
-        </Button>
+        {/* Fechar descarta o que está em tela — por isso confirma, e Parar não:
+            parar só encerra a tradução e deixa o texto onde está. */}
+        <ConfirmDialog
+          trigger={
+            <Button variant="outline" size="sm" className="h-7 text-xs" data-action="close">
+              Fechar
+            </Button>
+          }
+          title="Fechar a transcrição?"
+          description={
+            stopped
+              ? "O texto em tela será descartado. O que foi transcrito já está salvo no histórico."
+              : "A tradução em andamento será encerrada e o texto em tela, descartado. O que foi transcrito até agora fica salvo no histórico."
+          }
+          confirmLabel="Fechar"
+          onConfirm={onClose}
+        />
       </div>
     </header>
   );

@@ -105,6 +105,15 @@ export function TranslationPanel({
    */
   const likelySameLanguage = connected && empty && sourceActive;
 
+  const emptyLabel =
+    empty && connected
+      ? paused
+        ? "Pausado"
+        : likelySameLanguage
+          ? `sem tradução: o modelo não traduz fala que já está em ${language.label}`
+          : "Aguardando fala"
+      : null;
+
   return (
     <section
       className="panel flex min-h-0 min-w-0 flex-col bg-background px-4 pb-5 pt-[18px] sm:px-6 lg:px-10"
@@ -118,6 +127,16 @@ export function TranslationPanel({
         {statusLabel ? (
           <span className="panel-status text-[11px] uppercase tracking-[0.08em] text-muted-foreground/70">
             {statusLabel}
+          </span>
+        ) : null}
+        {/* O aviso de vazio fica ao lado do nome do idioma: numa faixa baixa,
+            uma linha a mais no corpo custa uma linha de legenda. */}
+        {emptyLabel ? (
+          <span
+            className="panel-empty min-w-0 truncate text-[11px] tracking-[0.04em] text-muted-foreground/70"
+            title={emptyLabel}
+          >
+            {emptyLabel}
           </span>
         ) : null}
         {track.error ? (
@@ -142,15 +161,6 @@ export function TranslationPanel({
           </p>
         ))}
         {current ? <p className="caption is-current">{current}</p> : null}
-        {empty && connected ? (
-          <p className="text-sm tracking-[0.04em] text-muted-foreground/70">
-            {paused
-              ? "Pausado"
-              : likelySameLanguage
-                ? `Ouvindo, mas sem tradução: o modelo não traduz fala que já está em ${language.label}.`
-                : "Aguardando fala"}
-          </p>
-        ) : null}
       </div>
     </section>
   );

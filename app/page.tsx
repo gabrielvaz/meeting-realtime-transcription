@@ -75,6 +75,8 @@ export default function Page() {
 
   const isLive = translation.runState !== "idle";
   const paused = translation.runState === "paused";
+  // Encerrada, mas ainda em tela: o texto continua disponível para ler e copiar.
+  const stopped = translation.runState === "stopped";
   // Sem slides carregados o modo apresentação não tem o que apresentar.
   const presenting = preferences.mode === "presentation" && deck !== null;
 
@@ -161,8 +163,16 @@ export default function Page() {
     (track) => track.status === "reconnecting" || track.status === "requesting-token",
   );
 
+  /** Encerra a tradução e solta o microfone, sem sair da tela. */
   const handleStop = useCallback(() => {
     translation.stop();
+    microphone.stop();
+    previewRequested.current = false;
+  }, [microphone, translation]);
+
+  /** Sai da tela de transcrição e descarta o texto exibido. */
+  const handleClose = useCallback(() => {
+    translation.close();
     microphone.stop();
     previewRequested.current = false;
   }, [microphone, translation]);
@@ -175,7 +185,15 @@ export default function Page() {
         : [...selected, language];
       setSelected(next);
 
-      if (!isLive || paused) return;
+      if (!isLive) return;
+
+      // Pausado ou encerrado não há sessão para abrir, mas a área do idioma
+      // precisa aparecer na hora — senão o clique parece não ter funcionado.
+      if (paused || stopped) {
+        if (wasSelected) translation.hideLanguage(language);
+        else translation.showLanguage(language);
+        return;
+      }
 
       // Durante a sessão, adicionar ou remover mexe só na sessão daquele
       // idioma — as outras continuam traduzindo sem interrupção.
@@ -186,7 +204,7 @@ export default function Page() {
         translation.addLanguage(language);
       }
     },
-    [handleStop, isLive, paused, selected, translation],
+    [handleStop, isLive, paused, selected, stopped, translation],
   );
 
   const handleStart = useCallback(async () => {
@@ -227,6 +245,7 @@ export default function Page() {
           selected={selected}
           reconnecting={reconnecting}
           paused={paused}
+          stopped={stopped}
           showOriginal={preferences.showOriginal}
           preferences={preferences}
           glossary={glossary}
@@ -240,6 +259,7 @@ export default function Page() {
           onTogglePause={handleTogglePause}
           onClear={translation.clearTranscripts}
           onStop={handleStop}
+          onClose={handleClose}
         />
 
         {presenting && deck ? (

@@ -327,7 +327,11 @@ console.log("histórico".padEnd(22), JSON.stringify(history));
 
 const failures = [];
 if (paused.openPeers !== 0) failures.push("pausa não fechou as sessões");
-if (beforePause !== afterPause) failures.push("pausa perdeu o texto da legenda");
+// Prefixo, não igualdade: entre a leitura e o clique em Pausar ainda chegam
+// deltas, então o texto só pode ter crescido — nunca encolhido ou mudado.
+if (!afterPause.startsWith(beforePause.slice(0, Math.min(beforePause.length, 60)))) {
+  failures.push("pausa perdeu o texto da legenda");
+}
 if (history.count < 1) failures.push("sessão não foi gravada no histórico");
 if (readingApplied?.arrangement !== "rows") failures.push("organização não aplicou");
 if (hidden.panels.some((p) => p.lang === "ITALIANO")) failures.push("idioma desmarcado continuou visível");

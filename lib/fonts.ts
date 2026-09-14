@@ -3,6 +3,7 @@ import {
   IBM_Plex_Sans,
   Inter,
   JetBrains_Mono,
+  Plus_Jakarta_Sans,
   Source_Serif_4,
 } from "next/font/google";
 
@@ -45,6 +46,13 @@ const plexSans = IBM_Plex_Sans({
   variable: "--font-plex-sans",
 });
 
+/** A fonte de títulos do Beat Design System da Cardioline. */
+const jakarta = Plus_Jakarta_Sans({
+  subsets: ["latin", "latin-ext"],
+  display: "swap",
+  variable: "--font-jakarta",
+});
+
 const jetbrainsMono = JetBrains_Mono({
   subsets: ["latin", "latin-ext"],
   display: "swap",
@@ -57,6 +65,7 @@ export const FONT_VARIABLES = [
   atkinson.variable,
   sourceSerif.variable,
   plexSans.variable,
+  jakarta.variable,
   jetbrainsMono.variable,
 ].join(" ");
 
@@ -65,6 +74,7 @@ export type CaptionFontId =
   | "atkinson"
   | "source-serif"
   | "plex-sans"
+  | "jakarta"
   | "jetbrains";
 
 /**
@@ -104,6 +114,12 @@ export const CAPTION_FONTS: ReadonlyArray<{
     label: "IBM Plex Sans",
     note: "Letras mais abertas que a Inter.",
     stack: `var(--font-plex-sans), ${SYSTEM_FALLBACK}, sans-serif`,
+  },
+  {
+    id: "jakarta",
+    label: "Plus Jakarta Sans",
+    note: "A fonte de títulos do Beat Design System.",
+    stack: `var(--font-jakarta), ${SYSTEM_FALLBACK}, sans-serif`,
   },
   {
     id: "jetbrains",

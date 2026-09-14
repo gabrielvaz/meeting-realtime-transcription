@@ -294,7 +294,11 @@ o slide muda, o texto atrapalha, você tira da frente:
 | Acima dos slides | faixa na parte superior |
 | Na lateral direita | coluna ao lado, para slides em retrato |
 | Sobre os slides | sobreposta, com fundo translúcido; os slides ficam em tela cheia e **não** encolhem ao redimensionar |
-| Ocultar | só os slides. **A tradução continua rodando** e indo para o histórico |
+| Só os slides | legendas ocultas. **A tradução continua rodando** e indo para o histórico |
+| Só as legendas | slides ocultos — mas **não descarregados**, então a apresentação não volta ao primeiro slide |
+
+Os dois últimos também têm atalho: um ícone no canto superior direito de cada
+área alterna aquela área para tela cheia e volta ao layout anterior.
 
 No mesmo menu: três atalhos de tamanho e a organização quando há vários idiomas.
 
@@ -319,6 +323,34 @@ O tamanho do texto é calculado pelo **contêiner**, não pela viewport
 lateral saía com duas palavras por linha, cortadas: era grande demais porque
 media a janela, não o painel que a hospeda. Medido: 36px na faixa de largura
 inteira, 18px na coluna de 512px, sem regra nova para cada caso.
+
+### Apresentações guardadas
+
+Cada arquivo enviado fica guardado no navegador para reutilizar depois, com
+nome, tamanho e data. Dá para usar de novo em um clique ou apagar, sempre com
+confirmação.
+
+**Por que IndexedDB e não `localStorage`.** O pedido era `localStorage`, mas ele
+não serve: o limite típico é de 5 MB para *toda* a origem — que aqui já guarda
+histórico de transcrições, dicionário, preferências e a chave da API — enquanto
+um deck com imagens embutidas chega a 15 MB. E `localStorage` é síncrono:
+gravar alguns megabytes travaria a interface no meio da apresentação. IndexedDB
+é assíncrono, tem cota na casa das centenas de megabytes e continua sendo
+armazenamento local do navegador — nada sai daqui. O resto das preferências
+segue no `localStorage`, onde cabe bem.
+
+### Encaixe no contêiner
+
+Um iframe tem viewport próprio, então `vw`, `vh` e media queries do deck já
+respondem ao tamanho do contêiner: **deck responsivo funciona sem ajuda**. O que
+quebra é o deck de largura fixa, comum em apresentação — ele estoura quando a
+faixa de legendas ocupa metade da tela.
+
+Para esses, um script injetado aplica `zoom` proporcional, só reduzindo e só no
+eixo horizontal (encolher pela altura esmagaria um deck de rolagem longa).
+Medido: deck de 1280 px numa coluna de 1014 px recebe `zoom: 0.79`. O CSS
+injetado é conservador de propósito — só impede mídia de vazar. Reescrever o
+estilo de quem fez o deck seria pior que o problema.
 
 ### Como o HTML enviado é isolado
 
@@ -363,6 +395,24 @@ prévia ao vivo. Tudo no `localStorage`.
 | Papel | fundo quente, reunião longa |
 | Alto contraste | preto puro no branco puro, projetor ruim |
 | Âmbar | escuro com texto âmbar, sala às escuras |
+| Cardioline claro | a marca, em branco |
+| Cardioline escuro | a marca, em canvas navy |
+
+Os dois temas Cardioline seguem o **Beat Design System**, e os valores vêm do
+arquivo de tokens do próprio design system (`beat-ds`,
+`packages/ui/src/styles/globals.css`). Estão escritos em `hsl()` com os mesmos
+números da fonte, para conferir sem conversão no meio:
+
+| Token | Claro | Escuro |
+|---|---|---|
+| Primária (laranja) | `hsl(22 100% 47%)` — `#ee5b00` | `hsl(22 100% 55%)` |
+| Canvas | `hsl(0 0% 100%)` | `hsl(231 52% 5%)` — navy |
+| Texto | `hsl(0 0% 20%)` | `hsl(0 0% 95%)` |
+| Navy de destaque | `hsl(231 93% 15%)` — `#071046` | — |
+| Erro | `hsl(344 78% 52%)` — `#e0284f` | `hsl(344 78% 55%)` |
+
+A fonte de títulos do Beat DS, **Plus Jakarta Sans**, entrou como sexta opção de
+fonte das legendas.
 
 Três detalhes que custaram uma correção cada, todos agora travados em teste:
 
@@ -562,10 +612,10 @@ components/
   ConfirmDialog.tsx              confirmação de toda ação destrutiva
   GlossaryEditor.tsx             editor do dicionário, com campo de teste
   QuickCorrect.tsx               corrigir um termo selecionando-o na legenda
-  DeckPicker.tsx                 upload do HTML dos slides
   PresentationStage.tsx          iframe isolado + os cinco layouts de legenda
   LayoutMenu.tsx                 posição, tamanho e organização das legendas
   SplitHandle.tsx                divisor arrastável entre slides e legendas
+  DeckPicker.tsx                 upload, lista de guardadas e exclusão
   AppearanceSettings.tsx         tema, fonte e tamanho do texto
   TranslationDisplay.tsx         grid responsivo + transcrição original
   TranslationPanel.tsx           uma região de legenda + controles de áudio
@@ -579,7 +629,8 @@ lib/
   utils.ts                       `cn` do shadcn
   apiKey.ts                      chave do usuário no localStorage
   audioSource.ts                 AudioSource: microphone | display (tab audio)
-  deck.ts                        leitura e validação do HTML de apresentação
+  deck.ts                        leitura, validação e encaixe do HTML
+  deckStore.ts                   apresentações guardadas (IndexedDB)
   fonts.ts                       as 5 fontes de legenda
   themes.ts                      os 6 temas
   glossary.ts                    dicionário de correção de termos
@@ -722,7 +773,15 @@ carrega um identificador anônimo por processo, nunca um dado pessoal.
    **Leitura** ajusta tamanho, fonte e organização; **Pausar** interrompe a
    captura e a cobrança sem perder o texto; **Limpar** zera a transcrição;
    **Histórico** abre o que já foi gravado.
-6. "Parar" encerra tudo e guarda a sessão no histórico.
+6. **Parar** encerra a tradução e solta o microfone, mas **não sai da tela**:
+   o texto continua ali para reler, copiar ou deixar projetado.
+7. **Fechar** sai da tela e descarta o texto exibido — com confirmação, porque
+   é a única ação daqui que perde algo (o que já foi transcrito fica no
+   histórico de qualquer forma).
+
+Marcar ou desmarcar um idioma faz a área dele aparecer ou sumir **na hora**,
+inclusive com a tradução pausada ou encerrada — nesses casos a área aparece
+vazia e a sessão só abre ao retomar.
 
 ### Quando a onda não se mexe
 

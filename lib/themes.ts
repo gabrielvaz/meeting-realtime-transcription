@@ -15,6 +15,8 @@ export type ThemeId =
   | "system"
   | "light"
   | "dark"
+  | "cardioline"
+  | "cardioline-dark"
   | "paper"
   | "contrast"
   | "amber";
@@ -43,6 +45,18 @@ export const THEMES: ReadonlyArray<{
     label: "Escuro",
     note: "Para sala com luz apagada e projetor ligado.",
     swatch: ["#0d0d0d", "#ededed"],
+  },
+  {
+    id: "cardioline",
+    label: "Cardioline claro",
+    note: "Beat Design System: laranja #ee5b00 sobre branco.",
+    swatch: ["#ffffff", "#ee5b00"],
+  },
+  {
+    id: "cardioline-dark",
+    label: "Cardioline escuro",
+    note: "Beat Design System: canvas navy com laranja.",
+    swatch: ["#06081a", "#ff7a1a"],
   },
   {
     id: "paper",
@@ -81,5 +95,8 @@ export function applyTheme(id: string, root: HTMLElement): void {
     window.matchMedia?.("(prefers-color-scheme: dark)").matches;
   const resolved = id === "system" ? (prefersDark ? "dark" : "light") : id;
   root.dataset.theme = resolved;
-  root.classList.toggle("dark", resolved === "dark" || resolved === "amber");
+  root.classList.toggle(
+    "dark",
+    resolved === "dark" || resolved === "amber" || resolved === "cardioline-dark",
+  );
 }

@@ -48,6 +48,60 @@ export async function readDeckFile(file: File): Promise<Deck> {
   return { name: file.name, html, bytes: file.size };
 }
 
+/**
+ * Faz o deck caber no contêiner que o exibe.
+ *
+ * Um iframe já tem viewport próprio, então `vw`, `vh` e media queries do deck
+ * respondem ao tamanho do contêiner sozinhos — decks responsivos funcionam sem
+ * ajuda. O que quebra é o deck de largura fixa (`width: 1280px`), comum em
+ * apresentação: ele estoura e fica cortado quando a faixa de legendas ocupa
+ * metade da tela.
+ *
+ * O script injetado só **reduz**, nunca amplia, e só no eixo horizontal —
+ * encolher pela altura esmagaria um deck de rolagem longa. `zoom` em vez de
+ * `transform: scale()` porque mantém o layout e a rolagem coerentes, sem
+ * precisar de wrapper (que quebraria scripts que consultam `document.body`).
+ *
+ * O CSS é conservador de propósito: só impede mídia de vazar. Reescrever o
+ * estilo de quem fez o deck seria pior que o problema.
+ */
+const FIT_SNIPPET = `
+<style data-live-translation-fit>
+  img, svg, video, canvas, iframe, table { max-width: 100%; }
+  img, video { height: auto; }
+  html { overflow-x: hidden; }
+</style>
+<script data-live-translation-fit>
+(function () {
+  var root = document.documentElement;
+  var busy = false;
+  function fit() {
+    if (busy) return;
+    busy = true;
+    root.style.zoom = "1";
+    requestAnimationFrame(function () {
+      var natural = root.scrollWidth;
+      var available = root.clientWidth;
+      var ratio = available / Math.max(natural, 1);
+      root.style.zoom = ratio < 0.995 ? String(Math.max(ratio, 0.25)) : "1";
+      busy = false;
+    });
+  }
+  if (document.readyState === "complete") fit();
+  else window.addEventListener("load", fit);
+  window.addEventListener("resize", fit);
+  setTimeout(fit, 400);
+})();
+</script>
+`;
+
+/** Injeta o ajuste antes de `</body>`, ou no fim se não houver. */
+export function withResponsiveFit(html: string): string {
+  const closing = html.lastIndexOf("</body>");
+  if (closing === -1) return html + FIT_SNIPPET;
+  return html.slice(0, closing) + FIT_SNIPPET + html.slice(closing);
+}
+
 export function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;

@@ -178,8 +178,13 @@ export interface ReadingPreferences {
   bandSize: { bottom: number; top: number; right: number; overlay: number };
   /** Legendas em tela cheia, ou slides com as legendas numa faixa. */
   mode: "captions" | "presentation";
-  /** Onde as legendas ficam em relação aos slides. */
-  captionLayout: "bottom" | "top" | "right" | "overlay" | "hidden";
+  /**
+   * Onde as legendas ficam em relação aos slides. `hidden` é só slides;
+   * `only` é só legendas — os dois modos de foco dos botões de tela cheia.
+   */
+  captionLayout: "bottom" | "top" | "right" | "overlay" | "hidden" | "only";
+  /** Layout para onde voltar ao sair de um modo de foco. */
+  previousLayout: "bottom" | "top" | "right" | "overlay";
   theme: string;
   showOriginal: boolean;
 }
@@ -191,6 +196,7 @@ export const DEFAULT_PREFERENCES: ReadingPreferences = {
   bandSize: { bottom: 30, top: 30, right: 32, overlay: 26 },
   mode: "captions",
   captionLayout: "bottom",
+  previousLayout: "bottom",
   theme: "light",
   showOriginal: true,
 };

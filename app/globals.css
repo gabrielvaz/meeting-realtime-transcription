@@ -113,6 +113,74 @@
   --ring: #8f8f8f;
 }
 
+/*
+ * Cardioline — Beat Design System.
+ *
+ * Os valores vêm do arquivo de tokens do próprio design system
+ * (`beat-ds`: packages/ui/src/styles/globals.css) e estão escritos em `hsl()`
+ * com os mesmos números, para conferir contra a fonte sem conversão no meio.
+ *
+ *   Laranja primária  #ee5b00  hsl(22 100% 47%)
+ *   Navy profundo     #071046  hsl(231 93% 15%)
+ *   Azul claro        #f1f4fe  hsl(230 85% 97%)
+ *   Vermelho de erro  #e0284f  hsl(344 78% 52%)
+ */
+:root[data-theme="cardioline"] {
+  --ink: hsl(0 0% 20%);
+  --ink-soft: hsl(0 0% 45%);
+  --ink-faint: hsl(220 15% 65%);
+  --line: hsl(220 15% 90.4%);
+  --surface: hsl(0 0% 100%);
+  --danger: hsl(344 78% 52%);
+
+  --background: hsl(0 0% 100%);
+  --foreground: hsl(0 0% 20%);
+  --card: hsl(0 0% 100%);
+  --card-foreground: hsl(0 0% 20%);
+  --popover: hsl(0 0% 100%);
+  --popover-foreground: hsl(0 0% 20%);
+  --primary: hsl(22 100% 47%);
+  --primary-foreground: hsl(0 0% 100%);
+  --secondary: hsl(230 85% 97%);
+  --secondary-foreground: hsl(231 93% 16%);
+  --muted: hsl(210 20% 96%);
+  --muted-foreground: hsl(0 0% 45%);
+  --accent: hsl(230 85% 97%);
+  --accent-foreground: hsl(231 93% 15%);
+  --destructive: hsl(344 78% 52%);
+  --border: hsl(220 15% 90.4%);
+  --input: hsl(220 15% 91%);
+  --ring: hsl(22 100% 47%);
+}
+
+:root[data-theme="cardioline-dark"] {
+  --ink: hsl(0 0% 95%);
+  --ink-soft: hsl(220 15% 55%);
+  --ink-faint: hsl(231 20% 38%);
+  --line: hsl(231 30% 16%);
+  --surface: hsl(231 52% 5%);
+  --danger: hsl(344 78% 55%);
+
+  --background: hsl(231 52% 5%);
+  --foreground: hsl(0 0% 95%);
+  --card: hsl(231 44% 8%);
+  --card-foreground: hsl(0 0% 95%);
+  --popover: hsl(231 44% 8%);
+  --popover-foreground: hsl(0 0% 95%);
+  --primary: hsl(22 100% 55%);
+  --primary-foreground: hsl(0 0% 100%);
+  --secondary: hsl(231 31% 14%);
+  --secondary-foreground: hsl(230 85% 85%);
+  --muted: hsl(231 31% 11%);
+  --muted-foreground: hsl(220 15% 55%);
+  --accent: hsl(22 100% 55%);
+  --accent-foreground: hsl(0 0% 100%);
+  --destructive: hsl(344 78% 55%);
+  --border: hsl(231 30% 16%);
+  --input: hsl(231 31% 13%);
+  --ring: hsl(22 100% 55%);
+}
+
 :root[data-theme="paper"] {
   --ink: #2b2419;
   --ink-soft: #6b5f4d;

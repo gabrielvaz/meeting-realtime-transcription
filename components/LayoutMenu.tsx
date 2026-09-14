@@ -19,7 +19,8 @@ const LAYOUTS: ReadonlyArray<{ id: Layout; label: string; note: string }> = [
   { id: "top", label: "Acima dos slides", note: "Faixa na parte superior." },
   { id: "right", label: "Na lateral direita", note: "Coluna ao lado dos slides." },
   { id: "overlay", label: "Sobre os slides", note: "Sobreposta, com fundo translúcido." },
-  { id: "hidden", label: "Ocultar", note: "Só os slides. A tradução continua rodando." },
+  { id: "hidden", label: "Só os slides", note: "Legendas ocultas. A tradução continua rodando." },
+  { id: "only", label: "Só as legendas", note: "Slides ocultos, sem recarregar a apresentação." },
 ];
 
 /**
@@ -47,7 +48,7 @@ interface LayoutMenuProps {
   onChange: (patch: Partial<ReadingPreferences>) => void;
 }
 
-type SizedLayout = Exclude<ReadingPreferences["captionLayout"], "hidden">;
+type SizedLayout = Exclude<ReadingPreferences["captionLayout"], "hidden" | "only">;
 
 /**
  * Onde as legendas ficam durante a apresentação.
@@ -56,12 +57,21 @@ type SizedLayout = Exclude<ReadingPreferences["captionLayout"], "hidden">;
  * mexe no meio da fala: o slide muda, o texto atrapalha, você tira da frente.
  */
 export function LayoutMenu({ preferences, onChange }: LayoutMenuProps) {
-  const hidden = preferences.captionLayout === "hidden";
+  // Nos modos de foco não há divisa para dimensionar.
+  const focused =
+    preferences.captionLayout === "hidden" || preferences.captionLayout === "only";
   const sized = preferences.captionLayout as SizedLayout;
-  const current = hidden ? 0 : preferences.bandSize[sized];
+  const current = focused ? 0 : preferences.bandSize[sized];
 
   const setSize = (percent: number) =>
     onChange({ bandSize: { ...preferences.bandSize, [sized]: percent } });
+
+  const setLayout = (value: Layout) =>
+    onChange(
+      value === "hidden" || value === "only"
+        ? { captionLayout: value }
+        : { captionLayout: value, previousLayout: value },
+    );
 
   return (
     <DropdownMenu>
@@ -76,7 +86,7 @@ export function LayoutMenu({ preferences, onChange }: LayoutMenuProps) {
         </DropdownMenuLabel>
         <DropdownMenuRadioGroup
           value={preferences.captionLayout}
-          onValueChange={(value) => onChange({ captionLayout: value as Layout })}
+          onValueChange={(value) => setLayout(value as Layout)}
         >
           {LAYOUTS.map((item) => (
             <DropdownMenuRadioItem
@@ -93,7 +103,7 @@ export function LayoutMenu({ preferences, onChange }: LayoutMenuProps) {
           ))}
         </DropdownMenuRadioGroup>
 
-        {hidden ? null : (
+        {focused ? null : (
           <>
             <DropdownMenuSeparator />
             <DropdownMenuLabel className="flex items-baseline justify-between text-[11px] uppercase tracking-[0.08em] text-muted-foreground">

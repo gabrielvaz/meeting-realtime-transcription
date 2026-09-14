@@ -1,16 +1,18 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+
+import { Maximize2, Minimize2 } from "lucide-react";
 
 import { SplitHandle, type SplitEdge } from "@/components/SplitHandle";
 import { TranslationDisplay } from "@/components/TranslationDisplay";
-import type { Deck } from "@/lib/deck";
+import { withResponsiveFit, type Deck } from "@/lib/deck";
 import type { LanguageTrack } from "@/hooks/useRealtimeTranslation";
 import type { SubtitleSnapshot } from "@/lib/subtitleBuffer";
 import { DEFAULT_PREFERENCES, type ReadingPreferences } from "@/lib/transcriptLog";
 
 type Layout = ReadingPreferences["captionLayout"];
-type SizedLayout = Exclude<Layout, "hidden">;
+type SizedLayout = Exclude<Layout, "hidden" | "only">;
 
 const EDGE: Record<SizedLayout, SplitEdge> = {
   bottom: "bottom",
@@ -53,12 +55,16 @@ export function PresentationStage({
 }: PresentationStageProps) {
   const frameRef = useRef<HTMLIFrameElement>(null);
   const stageRef = useRef<HTMLElement>(null);
+  // Injetado uma vez por deck, não a cada render: mudar `srcDoc` recarrega o
+  // documento e perderia o slide em que a pessoa está.
+  const html = useMemo(() => withResponsiveFit(deck.html), [deck.html]);
   const [dragging, setDragging] = useState(false);
   /** Tamanho durante o arrasto; `null` quando vale o que está salvo. */
   const [live, setLive] = useState<number | null>(null);
 
   const layout = preferences.captionLayout;
-  const sized = layout !== "hidden" ? (layout as SizedLayout) : null;
+  const focused = layout === "hidden" || layout === "only";
+  const sized = focused ? null : (layout as SizedLayout);
   const size = sized ? (live ?? preferences.bandSize[sized]) : 0;
 
   // As setas do teclado precisam chegar aos slides, não à página.
@@ -88,6 +94,41 @@ export function PresentationStage({
     });
   }, [onPreferences, preferences.bandSize, sized]);
 
+  /**
+   * Alterna entre o layout normal e um modo de foco, lembrando de onde veio.
+   * Os slides continuam montados no modo "só legendas" — desmontar o iframe
+   * recarregaria o deck e jogaria a pessoa de volta para o primeiro slide.
+   */
+  const focus = useCallback(
+    (target: "hidden" | "only") => {
+      onPreferences({
+        captionLayout: layout === target ? preferences.previousLayout : target,
+      });
+    },
+    [layout, onPreferences, preferences.previousLayout],
+  );
+
+  const focusButton = (
+    target: "hidden" | "only",
+    label: string,
+    className: string,
+  ) => (
+    <button
+      type="button"
+      aria-label={layout === target ? "Sair da tela cheia" : label}
+      title={layout === target ? "Sair da tela cheia" : label}
+      data-focus={target}
+      onClick={() => focus(target)}
+      className={`absolute z-20 flex size-8 items-center justify-center rounded-sm border border-border bg-background/80 text-muted-foreground opacity-40 backdrop-blur transition hover:opacity-100 hover:text-foreground focus-visible:opacity-100 ${className}`}
+    >
+      {layout === target ? (
+        <Minimize2 className="size-4" aria-hidden="true" />
+      ) : (
+        <Maximize2 className="size-4" aria-hidden="true" />
+      )}
+    </button>
+  );
+
   const handle = sized ? (
     <SplitHandle
       edge={EDGE[sized]}
@@ -110,8 +151,23 @@ export function PresentationStage({
     />
   );
 
+  /**
+   * Estrutura única para todos os layouts, com chaves estáveis.
+   *
+   * Isto não é preferência de estilo: com uma árvore JSX por layout, o iframe
+   * mudava de posição entre os filhos e o React o desmontava e remontava —
+   * recarregando o deck e jogando quem apresenta de volta ao primeiro slide.
+   * Com `key` fixa e uma só estrutura, ele nunca é recriado; o que muda é
+   * apenas a classe e a direção do flex.
+   */
   const slides = (
-    <div className="min-h-0 min-w-0 flex-1 bg-background">
+    <div
+      key="slides"
+      className={`relative min-h-0 min-w-0 flex-1 bg-background ${
+        layout === "only" ? "hidden" : ""
+      }`}
+    >
+      {focusButton("hidden", "Slides em tela cheia", "right-2 top-2")}
       {/*
         `srcDoc` em vez de um blob URL: sem objeto para criar, revogar ou vazar
         quando o usuário troca de arquivo no meio da apresentação. A origem
@@ -120,8 +176,7 @@ export function PresentationStage({
         Fundo branco e `colorScheme: light` fixos: um deck que não define o
         próprio fundo herdaria o canvas escuro do tema e ficaria com texto preto
         sobre preto. Não dá para reestilizar o documento do usuário — ele é de
-        outra origem —, então garantimos o que o autor dele assumiu. Deck que
-        define o próprio fundo pinta por cima.
+        outra origem —, então garantimos o que o autor dele assumiu.
 
         `pointerEvents: none` durante o arrasto é reforço: a captura de ponteiro
         já mantém os eventos no divisor, mas sem isto o cursor pisca ao cruzar
@@ -129,7 +184,7 @@ export function PresentationStage({
       */}
       <iframe
         ref={frameRef}
-        srcDoc={deck.html}
+        srcDoc={html}
         title={`Slides: ${deck.name}`}
         data-deck-frame=""
         className="size-full border-0"
@@ -144,70 +199,63 @@ export function PresentationStage({
     </div>
   );
 
-  if (layout === "hidden") {
-    return (
-      <main ref={stageRef} className="flex min-h-0 flex-1 flex-col" data-layout="hidden">
-        {slides}
-      </main>
-    );
-  }
+  /**
+   * A posição faz parte de cada variante, e não de um `relative` fixo: as duas
+   * classes de posicionamento do Tailwind competem pela mesma propriedade e a
+   * ordem no CSS gerado decide, não a ordem no atributo. Com `relative` fixo, a
+   * faixa sobreposta voltava para o fluxo e encolhia os slides. `absolute` já
+   * serve de referência para o botão de foco.
+   */
+  const BAND_CLASS: Record<Layout, string> = {
+    bottom: "relative flex-none border-t border-border",
+    top: "relative flex-none border-b border-border",
+    right: "relative flex-none border-l border-border",
+    overlay: "absolute inset-x-0 bottom-0 border-t border-border",
+    only: "relative min-h-0 flex-1",
+    hidden: "",
+  };
 
-  if (layout === "overlay") {
-    return (
-      <main
-        ref={stageRef}
-        className="relative flex min-h-0 flex-1 flex-col"
-        data-layout="overlay"
+  const bandStyle =
+    layout === "right"
+      ? { width: `${size}%` }
+      : layout === "only"
+        ? {}
+        : { height: `${size}%` };
+
+  const band =
+    layout === "hidden" ? null : (
+      <div
+        key="band"
+        className={`flex flex-col ${BAND_CLASS[layout]}`}
+        style={bandStyle}
+        data-caption-band=""
+        data-caption-overlay={layout === "overlay" ? "" : undefined}
       >
-        {slides}
-        <div
-          className="absolute inset-x-0 bottom-0 flex flex-col border-t border-border"
-          style={{ height: `${size}%` }}
-          data-caption-band=""
-          data-caption-overlay=""
-        >
-          {handle}
-          {captions}
-        </div>
-      </main>
+        {focusButton("only", "Legendas em tela cheia", "right-2 top-2")}
+        {layout === "overlay" ? handle : null}
+        {captions}
+      </div>
     );
-  }
 
-  if (layout === "right") {
-    return (
-      <main ref={stageRef} className="flex min-h-0 flex-1 flex-row" data-layout="right">
-        {slides}
-        {handle}
-        <div
-          className="flex flex-none flex-col border-l border-border"
-          style={{ width: `${size}%` }}
-          data-caption-band=""
-        >
-          {captions}
-        </div>
-      </main>
-    );
-  }
-
-  const band = (
-    <div
-      className={`flex flex-none flex-col ${
-        layout === "top" ? "border-b" : "border-t"
-      } border-border`}
-      style={{ height: `${size}%` }}
-      data-caption-band=""
-    >
-      {captions}
-    </div>
-  );
+  const MAIN_CLASS: Record<Layout, string> = {
+    // `flex-col-reverse` põe a faixa em cima sem trocar a ordem dos filhos.
+    bottom: "flex flex-col",
+    top: "flex flex-col-reverse",
+    right: "flex flex-row",
+    overlay: "relative flex flex-col",
+    only: "flex flex-col",
+    hidden: "flex flex-col",
+  };
 
   return (
-    <main ref={stageRef} className="flex min-h-0 flex-1 flex-col" data-layout={layout}>
-      {layout === "top" ? band : null}
-      {layout === "top" ? handle : null}
+    <main
+      ref={stageRef}
+      className={`min-h-0 flex-1 ${MAIN_CLASS[layout]}`}
+      data-layout={layout}
+    >
       {slides}
-      {layout === "bottom" ? handle : null}
-      {layout === "bottom" ? band : null}
+      {layout === "overlay" ? null : handle}
+      {band}
     </main>
   );
 }

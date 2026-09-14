@@ -40,7 +40,16 @@ export interface LanguageTrack {
   diagnostics: TranslationSessionDiagnostics | null;
 }
 
-export type RunState = "idle" | "starting" | "running" | "paused" | "stopping";
+/**
+ * `stopped` é diferente de `idle`: a tradução acabou, mas o texto continua na
+ * tela para ler, copiar ou projetar. Só `close()` limpa e volta ao início.
+ */
+export type RunState =
+  | "idle"
+  | "starting"
+  | "running"
+  | "paused"
+  | "stopped";
 
 export interface UsageSnapshot {
   elapsedSeconds: number;
@@ -280,21 +289,39 @@ export function useRealtimeTranslation({
     [createSession, ensureSourceBuffer, setCaptureEnabled],
   );
 
+  /**
+   * Encerra a tradução mas mantém a tela: quem acabou de apresentar costuma
+   * querer reler, copiar um trecho ou deixar a última frase projetada.
+   */
   const stop = useCallback(() => {
-    setRunState("stopping");
     for (const language of [...sessionsRef.current.keys()]) {
       buffersRef.current.get(language)?.finalize();
-      destroySession(language);
+      destroySession(language, true);
     }
     sourceBufferRef.current?.finalize();
     setSourceSubtitle(sourceBufferRef.current?.snapshot() ?? EMPTY_SUBTITLE);
+    setCaptureEnabled(false);
     meterRef.current.stop();
     persist(true);
+    setSourceActive(false);
+    setRunState("stopped");
+  }, [destroySession, persist, setCaptureEnabled]);
 
+  /** Descarta o que está em tela e volta ao estado inicial. */
+  const close = useCallback(() => {
+    for (const language of [...sessionsRef.current.keys()]) destroySession(language);
+    sessionsRef.current.clear();
+    buffersRef.current.clear();
+    segmentsRef.current.clear();
+    sourceSegmentsRef.current = [];
+    sourceBufferRef.current = null;
+    setTracks({});
+    setSourceSubtitle(EMPTY_SUBTITLE);
     sourceOwnerRef.current = null;
     logIdRef.current = null;
+    meterRef.current.reset();
     setRunState("idle");
-  }, [destroySession, persist]);
+  }, [destroySession]);
 
   /**
    * Pausa de verdade: o microfone para de enviar áudio e as sessões são
@@ -342,6 +369,50 @@ export function useRealtimeTranslation({
     lastSourceDeltaRef.current = 0;
     setSourceActive(false);
   }, [patchTrack]);
+
+  /**
+   * Mostra a área de um idioma sem abrir sessão.
+   *
+   * Serve para pausado e encerrado: marcar o idioma precisa fazer a área
+   * aparecer na hora, mesmo que a tradução só comece ao retomar. Sem isto o
+   * contador subia e a tela não mudava — parecia que o clique não funcionou.
+   */
+  const showLanguage = useCallback(
+    (language: TargetLanguageCode) => {
+      if (!segmentsRef.current.has(language)) segmentsRef.current.set(language, []);
+      let buffer = buffersRef.current.get(language);
+      if (!buffer) {
+        buffer = new SubtitleBuffer({
+          onSegmentClosed: (segment) => segmentsRef.current.get(language)?.push(segment),
+          transform: transformRef.current,
+        });
+        buffersRef.current.set(language, buffer);
+      }
+      const snapshot = buffer.snapshot();
+      languagesEverRef.current.add(language);
+      setTracks((previous) => ({
+        ...previous,
+        [language]: {
+          ...previous[language],
+          language,
+          status: previous[language]?.status ?? "closed",
+          error: null,
+          subtitle: snapshot,
+          visible: true,
+          diagnostics: previous[language]?.diagnostics ?? null,
+        },
+      }));
+    },
+    [],
+  );
+
+  /** Esconde a área sem fechar sessão — usado quando não há sessão aberta. */
+  const hideLanguage = useCallback(
+    (language: TargetLanguageCode) => {
+      patchTrack(language, { visible: false });
+    },
+    [patchTrack],
+  );
 
   /** Marca o idioma de novo: reabre a sessão e o texto anterior reaparece. */
   const addLanguage = useCallback(
@@ -446,7 +517,10 @@ export function useRealtimeTranslation({
     usage,
     start,
     stop,
+    close,
     pause,
+    showLanguage,
+    hideLanguage,
     resume,
     clearTranscripts,
     addLanguage,
