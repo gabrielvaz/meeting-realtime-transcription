@@ -83,7 +83,10 @@ await page.evaluateOnNewDocument((audioSrc) => {
 
 let readingApplied = null;
 const logs = [];
-page.on("console", (m) => { if (m.text().includes("[translate:")) logs.push(m.text()); });
+page.on("console", (m) => {
+  const text = m.text();
+  if (text.includes("[translate:") || text.includes("[caption:")) logs.push(text);
+});
 page.on("pageerror", (e) => logs.push(`[pageerror] ${e.message}`));
 
 const state = () => page.evaluate(() => ({
@@ -192,15 +195,19 @@ readingApplied = await page.evaluate(() => {
 await page.screenshot({ path: `${OUT}/04-leitura.png` });
 
 // Pausar e retomar: o texto tem de sobreviver.
-const beforePause = await page.evaluate(() =>
-  [...document.querySelectorAll(".caption")].map((c) => c.textContent).join(" | "),
-);
+// Espaços normalizados: ao pausar, o trecho em curso é fechado e passa por
+// `trim()`, o que muda o espaçamento sem que nada tenha se perdido.
+const captionText = () =>
+  page.evaluate(() =>
+    [...document.querySelectorAll(".caption")]
+      .map((c) => c.textContent.replace(/\s+/g, " ").trim())
+      .join(" | "),
+  );
+const beforePause = await captionText();
 await page.click('[data-pause-toggle]');
 await wait(2500);
 const paused = await step("pausado", state);
-const afterPause = await page.evaluate(() =>
-  [...document.querySelectorAll(".caption")].map((c) => c.textContent).join(" | "),
-);
+const afterPause = await captionText();
 await page.screenshot({ path: `${OUT}/05-pausado.png` });
 await page.click('[data-pause-toggle]');
 await wait(8000);
@@ -232,7 +239,13 @@ await page.setViewport({ width: 1600, height: 1000 });
 // `gum` precisa ser medido AINDA na sessão: ao parar, a tela inicial religa
 // a prévia do microfone e capturar de novo ali é o comportamento correto.
 // Trecho atual preto, trechos fechados cinza, e a área rolada até o fim.
-const captionStyle = await page.evaluate(() => {
+/**
+ * A ancoragem é eventual, não instantânea: depois de uma mudança de layout ela
+ * se resolve no próximo quadro. Medir num instante arbitrário produz falha
+ * intermitente, então esperamos o valor assentar.
+ */
+const measureCaption = () =>
+  page.evaluate(() => {
   const body = document.querySelector(".panel-body");
   const color = (sel) => {
     const el = document.querySelector(sel);
@@ -244,8 +257,15 @@ const captionStyle = await page.evaluate(() => {
     distanceFromBottom: body
       ? body.scrollHeight - body.scrollTop - body.clientHeight
       : null,
+    painel: body?.closest(".panel")?.querySelector(".panel-title")?.textContent,
   };
-});
+  });
+
+let captionStyle = await measureCaption();
+for (let attempt = 0; attempt < 8 && captionStyle.distanceFromBottom > 4; attempt += 1) {
+  await wait(250);
+  captionStyle = await measureCaption();
+}
 console.log("estilo da legenda".padEnd(22), JSON.stringify(captionStyle));
 
 // A partir daqui o teste mexe na seleção de texto, o que faz o navegador rolar

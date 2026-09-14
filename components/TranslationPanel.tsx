@@ -40,7 +40,16 @@ export function TranslationPanel({
   useEffect(() => {
     const node = scrollRef.current;
     if (!node || !pinnedRef.current) return;
-    node.scrollTop = node.scrollHeight;
+    const pin = () => {
+      node.scrollTop = node.scrollHeight;
+    };
+    pin();
+    // De novo no quadro seguinte: o efeito roda logo após o commit, e com flex
+    // mais container queries a altura final às vezes só sai numa segunda
+    // passada de layout. Sem isto a legenda para alguns pixels antes do fim
+    // depois de trocar organização, fonte ou quantidade de idiomas.
+    const frame = requestAnimationFrame(pin);
+    return () => cancelAnimationFrame(frame);
   }, [track.subtitle.revision]);
 
   /**
@@ -69,13 +78,19 @@ export function TranslationPanel({
    * sem ninguém ter rolado nada. Isso desancorava a legenda para sempre e o
    * texto novo parava de aparecer — o bug que parecia "o texto some da tela".
    */
-  const checkPinned = () => {
+  const checkPinned = (cause: string) => {
     requestAnimationFrame(() => {
       const node = scrollRef.current;
       if (!node) return;
       const distanceFromBottom =
         node.scrollHeight - node.scrollTop - node.clientHeight;
-      pinnedRef.current = distanceFromBottom < 48;
+      const next = distanceFromBottom < 48;
+      if (next !== pinnedRef.current) {
+        console.debug(
+          `[caption:${track.language}] ancoragem ${next ? "retomada" : "solta"} por ${cause} (${Math.round(distanceFromBottom)}px do fim)`,
+        );
+      }
+      pinnedRef.current = next;
     });
   };
 
@@ -117,9 +132,9 @@ export function TranslationPanel({
       <div
         className="panel-body flex min-h-0 flex-1 flex-col gap-[0.4em] overflow-y-auto pb-[0.25em] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
         ref={scrollRef}
-        onWheel={checkPinned}
-        onTouchMove={checkPinned}
-        onKeyDown={checkPinned}
+        onWheel={() => checkPinned("roda do mouse")}
+        onTouchMove={() => checkPinned("toque")}
+        onKeyDown={() => checkPinned("teclado")}
       >
         {segments.map((segment, index) => (
           <p key={index} className="caption is-past">

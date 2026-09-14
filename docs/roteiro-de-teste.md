@@ -80,6 +80,27 @@ mesma cor do atual. O teste compara `getComputedStyle().color` dos dois e
 falhou na hora. É a segunda vez que essa asserção pega exatamente esse erro —
 num screenshot os dois parecem pretos.
 
+### A ancoragem da legenda é eventual, não instantânea
+
+Depois de uma mudança de layout — organização, fonte, quantidade de idiomas — a
+legenda volta ao fim no quadro seguinte, não no mesmo. Medir num instante
+arbitrário dava falha intermitente: o teste pegava a janela entre o commit do
+React e o layout final.
+
+A investigação valeu a pena porque apontou para dois lugares diferentes:
+
+- **No app:** a ancoragem passou a ser aplicada também num `requestAnimationFrame`
+  depois do commit. Com flex mais container queries, a altura final às vezes só
+  sai numa segunda passada de layout.
+- **No teste:** a medição espera o valor assentar (até 2 s). O invariante é "a
+  legenda termina no fim", não "está no fim neste milissegundo".
+
+O caminho até lá: instrumentei o componente para logar quando a ancoragem é
+solta e qual foi o resultado de cada tentativa. O log mostrou `pin → 0px do fim`
+repetidamente, provando que o app estava certo e que o problema era o momento da
+medição. O log de ancoragem solta ficou no código, porque diz por que a legenda
+parou de acompanhar quando isso for intencional.
+
 ### Sobre clicar em componentes Radix
 
 Os menus do shadcn respondem a eventos reais de ponteiro, não a `element.click()`
