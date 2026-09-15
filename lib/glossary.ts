@@ -53,12 +53,28 @@ export interface GlossaryEntry {
 export const DEFAULT_GLOSSARY: GlossaryEntry[] = [
   // Empresas
   // "card online" e "cardiolimne" saíram de testes reais, não de suposição.
-  { id: "g_cardioline", term: "Cardioline", variants: ["cardio line", "cardiolaine", "cardio lane", "cardioláine", "cárdio line", "card online", "card on line", "cardio online", "cardiolimne", "cardiolini", "cardiolina", "carta online", "cardiolyne", "cardiolain",
-    // "cardiolipin"/"cardiolipina" são termos reais de bioquímica, e entram
-    // aqui como exceção deliberada ao critério de não usar palavra legítima:
-    // num contexto Cardioline o modelo produz isso com frequência, e o risco
-    // de alguém discutir o fosfolipídio é baixo. Quem for discutir, remove.
-    "Cardiolipin", "Cardiolipina", "cardiolipin", "cardiolipina"] },
+  {
+    id: "g_cardioline",
+    term: "Cardioline",
+    variants: [
+      // Separadas: o padrão tolera espaço e hífen, então "cardio line" também
+      // casa "cardio-line".
+      "cardio line", "cárdio line", "cardio lane", "cardio online", "card online",
+      "card on line", "carta online", "cardio linha", "cardio lina",
+      // Emendadas — nenhuma é palavra legítima, todas saíram de testes reais
+      // ou são vizinhas fonéticas próximas das que saíram.
+      "cardiolaine", "cardioláine", "cardialine", "cardioonline", "cardiolinea",
+      "cardiolínea", "cardiolimne", "cardiolini", "cardiolina", "cardiolinia",
+      "cardiolyne", "cardiolyn", "cardiolain", "cardiolane", "cardiolin",
+      "cardioliny", "cardiolinne", "cardiolinha", "cardiolomy", "cardiolony",
+      "cardiolene", "cardioline's", "cardiolines",
+      // "cardiolipin"/"cardiolipina" são termos reais de bioquímica, e entram
+      // aqui como exceção deliberada ao critério de não usar palavra legítima:
+      // num contexto Cardioline o modelo produz isso com frequência, e o risco
+      // de alguém discutir o fosfolipídio é baixo. Quem for discutir, remove.
+      "Cardiolipin", "Cardiolipina", "cardiolipin", "cardiolipina",
+    ],
+  },
   { id: "g_cardios", term: "Cardios", variants: ["cardius", "cárdios", "cardio's", "cardiós"] },
 
   // Produtos Cardioline
@@ -100,7 +116,7 @@ export const DEFAULT_GLOSSARY: GlossaryEntry[] = [
   { id: "g_holter", term: "Holter", variants: [
     "rolter", "olter", "holte", "rólter", "ólter", "hólter", "houlter",
     "Holder", "Router", "Hotter", "Rooter", "Roteador", "Alterna", "Alter",
-    "Ater", "Oter", "Oterno",
+    "Ater", "Oter", "Oterno", "Euter", "Alten", "Halter", "Volter",
   ] },
   { id: "g_ecg", term: "ECG", variants: ["e c g", "e.c.g.", "e-c-g", "acg", "a c g", "ace ge", "ecgê"] },
   { id: "g_spirometria", term: "espirometria", variants: ["expirometria", "spirometria", "esperometria"] },
@@ -245,6 +261,16 @@ export interface CompiledGlossary {
   size: number;
 }
 
+/**
+ * Aspas que o modelo põe em volta do que ele acha que é nome próprio.
+ *
+ * Ele escreve coisas como `the term "Euter" shouldn't be translated`. Corrigir
+ * só a palavra deixaria `the term "Holter"` — aspas que ninguém falou. Só
+ * removemos quando existem **dos dois lados**: tirar uma aspa solta deixaria a
+ * outra órfã no meio de uma citação de verdade.
+ */
+const QUOTE = `["'“”‘’«»]`;
+
 export function compileGlossary(entries: readonly GlossaryEntry[]): CompiledGlossary {
   const rules: CompiledGlossary["rules"] = [];
 
@@ -261,13 +287,7 @@ export function compileGlossary(entries: readonly GlossaryEntry[]): CompiledGlos
      * quebrando a capitalização.
      */
     if (term !== term.toLowerCase()) {
-      rules.push({
-        pattern: new RegExp(
-          `(?<![\\p{L}\\p{N}])${variantToPattern(term)}(?![\\p{L}\\p{N}])`,
-          "giu",
-        ),
-        replacement: term,
-      });
+      rules.push(...quotedAndPlain(variantToPattern(term), term, false));
     }
 
     // Variantes mais longas primeiro: senão "ecg" consome o começo de "ecg-12".
@@ -289,19 +309,44 @@ export function compileGlossary(entries: readonly GlossaryEntry[]): CompiledGlos
        * distingue o nome mal ouvido do verbo "alterna".
        */
       const caseSensitive = variant !== variant.toLowerCase();
-      rules.push({
-        // `\b` não funciona quando a variante começa ou termina em pontuação,
-        // então usamos lookaround por caractere de palavra.
-        pattern: new RegExp(
-          `(?<![\\p{L}\\p{N}])${variantToPattern(variant, caseSensitive)}(?![\\p{L}\\p{N}])`,
-          caseSensitive ? "gu" : "giu",
-        ),
-        replacement: term,
-      });
+      rules.push(
+        ...quotedAndPlain(variantToPattern(variant, caseSensitive), term, caseSensitive),
+      );
     }
   }
 
   return { rules, size: rules.length };
+}
+
+/**
+ * Duas regras por variante: a entre aspas primeiro, para consumi-las junto; a
+ * solta depois. A ordem importa — a solta casaria antes e deixaria as aspas.
+ *
+ * `\b` não serve de fronteira aqui porque a variante pode começar ou terminar
+ * em pontuação, então usamos lookaround por caractere de palavra.
+ */
+function quotedAndPlain(
+  pattern: string,
+  replacement: string,
+  caseSensitive: boolean,
+): CompiledGlossary["rules"] {
+  const flags = caseSensitive ? "gu" : "giu";
+  return [
+    {
+      pattern: new RegExp(
+        `(?<![\\p{L}\\p{N}])${QUOTE}${pattern}${QUOTE}(?![\\p{L}\\p{N}])`,
+        flags,
+      ),
+      replacement,
+    },
+    {
+      pattern: new RegExp(
+        `(?<![\\p{L}\\p{N}])${pattern}(?![\\p{L}\\p{N}])`,
+        flags,
+      ),
+      replacement,
+    },
+  ];
 }
 
 export function applyGlossary(text: string, glossary: CompiledGlossary): string {

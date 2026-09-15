@@ -338,6 +338,9 @@ body {
    continua na tela — o texto nunca some, a área é que rola. */
 .caption.is-current {
   color: var(--ink);
+  /* Semi-bold além da cor: a distinção sobrevive de longe e num projetor
+     desbotado, onde só a diferença de cinza para preto se perde. */
+  font-weight: 600;
 }
 
 .caption.is-past {

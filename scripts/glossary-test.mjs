@@ -57,6 +57,25 @@ const cases = [
   { input: "o nome Alterna não deve ser traduzido", expect: "Holter" },
   { input: "il nome Alterna non deve essere tradotto", expect: "Holter" },
 
+  // Variantes novas de Cardioline
+  { input: "Apresentação da cardialine hoje.", expect: "Cardioline" },
+  { input: "O site da cardioonline saiu do ar.", expect: "Cardioline" },
+  { input: "A cardiolinea fabrica o aparelho.", expect: "Cardioline" },
+  { input: "Usamos o cardiolinha na clínica.", expect: "Cardioline" },
+  { input: "presentation on cardiolomy", expect: "Cardioline" },
+  { input: "O nome Cardiolínea está errado.", expect: "Cardioline" },
+
+  // Aspas ao redor do termo saem junto com a substituição
+  { input: 'just like the term "Euter" shouldn\'t be translated', expect: "the term Holter shouldn" },
+  { input: "o termo “cardiolimne” não deve ser traduzido", expect: "o termo Cardioline não" },
+  // Minúscula não casa de propósito: "Holder" é variante sensível à caixa.
+  { input: "the name 'Holder' stays", expect: "the name Holter stays" },
+  { input: "the name 'holder' stays", expect: "'holder'" },
+  { input: 'This name, "Cardioline", is correct.', expect: "This name, Cardioline, is correct." },
+
+  // Aspa só de um lado fica onde está: tirá-la deixaria a outra órfã.
+  { input: 'Ele disse: "Cardioline é boa.', expect: '"Cardioline é boa.' },
+
   // Normalização de caixa: a forma correta do termo é regra por si só
   { input: "apresentação da cardioline hoje", expect: "Cardioline" },
   { input: "This name, CardioLine, shouldn't change.", expect: "Cardioline" },

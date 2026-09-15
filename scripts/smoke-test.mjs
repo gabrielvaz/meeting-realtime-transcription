@@ -247,13 +247,17 @@ await page.setViewport({ width: 1600, height: 1000 });
 const measureCaption = () =>
   page.evaluate(() => {
   const body = document.querySelector(".panel-body");
-  const color = (sel) => {
+  const style = (sel) => {
     const el = document.querySelector(sel);
-    return el ? getComputedStyle(el).color : null;
+    return el ? getComputedStyle(el) : null;
   };
+  const color = (sel) => style(sel)?.color ?? null;
+  const weight = (sel) => style(sel)?.fontWeight ?? null;
   return {
     past: color(".caption.is-past"),
     current: color(".caption.is-current"),
+    pastWeight: weight(".caption.is-past"),
+    currentWeight: weight(".caption.is-current"),
     distanceFromBottom: body
       ? body.scrollHeight - body.scrollTop - body.clientHeight
       : null,
@@ -339,6 +343,17 @@ if (!italianAfter.startsWith(italianBefore)) failures.push("texto do idioma se p
 if (stopped.playingAudio > 0) failures.push("áudio traduzido foi reproduzido");
 if (captionStyle.past && captionStyle.past === captionStyle.current) {
   failures.push("trecho antigo tem a mesma cor do atual");
+}
+// O trecho atual também é semi-bold: num projetor desbotado a diferença de
+// cinza para preto se perde, o peso não.
+if (captionStyle.currentWeight && Number(captionStyle.currentWeight) < 600) {
+  failures.push(`trecho atual não está em semi-bold (${captionStyle.currentWeight})`);
+}
+if (
+  captionStyle.pastWeight &&
+  Number(captionStyle.pastWeight) >= Number(captionStyle.currentWeight)
+) {
+  failures.push("trecho antigo tem o mesmo peso do atual");
 }
 if (captionStyle.distanceFromBottom > 4) failures.push("legenda não rolou até o fim");
 if (!glossaryApplied) failures.push("dicionário não chegou à legenda");

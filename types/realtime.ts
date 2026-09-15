@@ -43,6 +43,7 @@ export type SessionStatus =
 /** Categorias de erro que a interface precisa distinguir. */
 export type SessionErrorKind =
   | "auth"
+  | "no-credits"
   | "rate-limit"
   | "api-unavailable"
   | "connection-lost"

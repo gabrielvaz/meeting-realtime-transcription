@@ -1,7 +1,8 @@
 import {
   ClientSecretError,
-  mintClientSecret,
   classifyHttpError,
+  isRetryable,
+  mintClientSecret,
 } from "@/lib/openai/clientSecret";
 import type {
   SessionError,
@@ -170,10 +171,11 @@ export class TranslationSession {
       if (this.#isStale(generation)) return;
 
       if (!sdpResponse.ok) {
-        throw new SessionFailure(
-          classifyHttpError(sdpResponse.status, answerSdp),
-          sdpResponse.status >= 500 || sdpResponse.status === 429,
-        );
+        // A decisão de retentar vem do tipo classificado, não do status cru:
+        // 429 pode ser limite de taxa (espere) ou falta de crédito (nunca vai
+        // passar), e o corpo da resposta é quem distingue.
+        const detail = classifyHttpError(sdpResponse.status, answerSdp);
+        throw new SessionFailure(detail, isRetryable(detail.kind));
       }
 
       await pc.setRemoteDescription({ type: "answer", sdp: answerSdp });

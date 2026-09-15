@@ -483,6 +483,11 @@ resposta honesta a um problema que não tem solução preditiva.
 
 ### Três decisões que fazem isso funcionar de verdade:
 
+- **Aspas ao redor do termo saem junto.** O modelo escreve
+  `the term "Euter" shouldn't be translated` — corrigir só a palavra deixaria
+  aspas que ninguém falou. Elas só são removidas quando existem **dos dois
+  lados**: tirar uma aspa solta deixaria a outra órfã no meio de uma citação de
+  verdade, e isso é caso de teste.
 - **A correção roda sobre o texto acumulado, nunca sobre o delta isolado.**
   "Cardioline" chega partido em vários fragmentos; casar em cima de um fragmento
   solto nunca funcionaria.
@@ -517,7 +522,7 @@ O limite honesto: isso corrige **forma escrita**. Se o modelo entendeu outra
 coisa e traduziu a frase inteira errado, trocar uma palavra não conserta.
 
 ```bash
-npm run test:glossary   # 47 casos, incluindo os negativos
+npm run test:glossary   # 59 casos, incluindo os negativos
 ```
 
 ```bash
@@ -741,6 +746,24 @@ Todas verificadas na documentação — nenhuma é suposição.
     bloquear — o erro é logado no console.
 
 ---
+
+## Erros que a interface distingue
+
+Um 429 da OpenAI pode ser duas coisas opostas, e a resposta certa muda de lado:
+
+| Causa | Mensagem | Reconecta? |
+|---|---|---|
+| Limite de taxa | "Reduza o número de idiomas simultâneos ou aguarde." | sim, com backoff |
+| **Sem créditos** | "A conta da OpenAI está sem créditos. Adicione saldo em platform.openai.com → Billing." | **não** |
+
+O corpo da resposta é quem distingue (`insufficient_quota`). Sem essa separação,
+quem está sem saldo lê "reduza o número de idiomas", mexe no lugar errado, e o
+app fica reconectando cinco vezes contra uma parede.
+
+A decisão de retentar agora vem de uma função só, `isRetryable(kind)`, usada nos
+três pontos que podem falhar — criar o segredo pelo servidor, criar direto na
+OpenAI e abrir a call de SDP. Antes cada um decidia do seu jeito: o do SDP
+olhava o status HTTP cru, e era ele que insistia.
 
 ## Privacidade
 

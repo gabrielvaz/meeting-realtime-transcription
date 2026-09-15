@@ -1,6 +1,11 @@
 import { readApiKey } from "@/lib/apiKey";
 import { isTargetLanguageCode } from "@/lib/languages";
-import type { ClientSecretResponse, SessionError, TargetLanguageCode } from "@/types/realtime";
+import type {
+  ClientSecretResponse,
+  SessionError,
+  SessionErrorKind,
+  TargetLanguageCode,
+} from "@/types/realtime";
 
 /**
  * Cria o client secret efêmero de uma sessão de tradução.
@@ -78,6 +83,19 @@ export function classifyHttpError(status: number, body: string): SessionError {
     };
   }
   if (status === 429) {
+    /**
+     * Saldo zerado e limite de taxa chegam os dois como 429, e mandam para
+     * lados opostos: um se resolve esperando, o outro nunca. Dizer "reduza o
+     * número de idiomas" para quem está sem crédito manda a pessoa mexer no
+     * lugar errado — e o app fica reconectando contra uma parede.
+     */
+    if (/insufficient_quota|no credits|exceeded your current quota/i.test(body)) {
+      return {
+        kind: "no-credits",
+        message:
+          "A conta da OpenAI está sem créditos. Adicione saldo em platform.openai.com → Billing.",
+      };
+    }
     return {
       kind: "rate-limit",
       message:
@@ -104,6 +122,18 @@ export function classifyHttpError(status: number, body: string): SessionError {
     kind: "unknown",
     message: body.slice(0, 300) || `Erro HTTP ${status}.`,
   };
+}
+
+/**
+ * Vale a pena tentar de novo?
+ *
+ * Uma regra só, usada nos três lugares que falham — criar o segredo pelo
+ * servidor, criar direto na OpenAI e abrir a call de SDP. Antes cada um decidia
+ * do seu jeito: o do SDP olhava o status HTTP cru, então um 429 por falta de
+ * crédito virava cinco tentativas de reconexão contra uma parede.
+ */
+export function isRetryable(kind: SessionErrorKind): boolean {
+  return kind === "api-unavailable" || kind === "rate-limit";
 }
 
 interface MintOptions {
@@ -164,10 +194,7 @@ async function mintDirect(
   const raw = await response.text();
   if (!response.ok) {
     const detail = classifyHttpError(response.status, raw);
-    throw new ClientSecretError(
-      detail,
-      detail.kind === "api-unavailable" || detail.kind === "rate-limit",
-    );
+    throw new ClientSecretError(detail, isRetryable(detail.kind));
   }
 
   let data: { value?: unknown; expires_at?: unknown };
@@ -230,7 +257,7 @@ async function mintViaServer(
         message:
           payload?.error ?? classifyHttpError(response.status, "").message,
       },
-      kind === "api-unavailable" || kind === "rate-limit",
+      isRetryable(kind),
     );
   }
 
