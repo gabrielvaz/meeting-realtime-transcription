@@ -15,8 +15,14 @@ const staticExport = process.env.STATIC_EXPORT === "1";
 
 const nextConfig: NextConfig = {
   pageExtensions: staticExport ? ["ts", "tsx"] : ["server.ts", "ts", "tsx"],
-  // O cliente precisa saber que não existe servidor para consultar.
-  env: { NEXT_PUBLIC_STATIC_EXPORT: staticExport ? "1" : "" },
+  // O cliente precisa saber que não existe servidor para consultar, e o
+  // basePath porque URLs dentro de `style` não são reescritas pelo Next.
+  env: {
+    NEXT_PUBLIC_STATIC_EXPORT: staticExport ? "1" : "",
+    NEXT_PUBLIC_BASE_PATH: staticExport
+      ? (process.env.PAGES_BASE_PATH ?? "/meeting-realtime-transcription")
+      : "",
+  },
   ...(staticExport
     ? {
         output: "export",

@@ -12,6 +12,7 @@ import { SessionControls } from "@/components/SessionControls";
 import { SettingsDialog } from "@/components/SettingsDialog";
 import { TranscriptHistory } from "@/components/TranscriptHistory";
 import { TranslationDisplay } from "@/components/TranslationDisplay";
+import { Wordmark } from "@/components/Wordmark";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -314,7 +315,9 @@ export default function Page() {
 
   return (
     <div className="app flex min-h-dvh flex-col">
-      <main className="mx-auto flex w-full max-w-[680px] flex-col gap-9 overflow-y-auto px-6 pb-16 pt-[clamp(32px,7vh,96px)]">
+      <main className="mx-auto flex w-full max-w-[680px] flex-col gap-9 overflow-y-auto px-6 pb-16 pt-[clamp(28px,6vh,72px)]">
+        <Wordmark height={13} className="mx-auto" />
+
         <div className="flex items-center justify-between gap-4">
           <h1 className="title text-[13px] font-semibold uppercase tracking-[0.14em]">
             Tradução ao vivo

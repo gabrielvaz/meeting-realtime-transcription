@@ -7,6 +7,7 @@ import { LayoutMenu } from "@/components/LayoutMenu";
 import { ReadingMenu } from "@/components/ReadingMenu";
 import { SettingsDialog } from "@/components/SettingsDialog";
 import { TranscriptHistory } from "@/components/TranscriptHistory";
+import { Wordmark } from "@/components/Wordmark";
 import { Button } from "@/components/ui/button";
 import { getLanguage } from "@/lib/languages";
 import type { GlossaryEntry } from "@/lib/glossary";
@@ -70,7 +71,17 @@ export function SessionControls({
         : "Traduzindo ao vivo";
 
   return (
-    <header className="live-bar flex flex-none flex-wrap items-center gap-x-4 gap-y-2 border-b border-border px-5 py-2.5 text-xs text-muted-foreground">
+    <header className="live-bar relative flex flex-none flex-wrap items-center gap-x-4 gap-y-2 border-b border-border px-5 py-2.5 text-xs text-muted-foreground">
+      {/*
+        Centralizado na tela, não no fluxo: a barra é densa e um item no meio
+        empurraria os controles. Fora do fluxo, ele nunca disputa espaço — e
+        `pointer-events-none` garante que jamais fique na frente de um clique.
+        Some abaixo de 1280px, onde a barra quebra em duas linhas e já não há
+        centro para ocupar.
+      */}
+      <span className="pointer-events-none absolute inset-x-0 top-1/2 hidden -translate-y-1/2 justify-center xl:flex">
+        <Wordmark height={10} className="opacity-70" />
+      </span>
       <span
         className={`size-[7px] flex-none rounded-full ${
           stopped ? "border border-muted-foreground" : ""
