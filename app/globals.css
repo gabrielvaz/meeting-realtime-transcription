@@ -323,6 +323,21 @@ body {
   container-type: inline-size;
 }
 
+/* A versão branca da marca entra nos temas escuros. A troca é por CSS, usando
+   a classe que o tema já põe na raiz: assim a marca certa aparece já na
+   primeira pintura, inclusive no tema "Sistema". */
+.wordmark-dark {
+  display: none;
+}
+
+.dark .wordmark-light {
+  display: none;
+}
+
+.dark .wordmark-dark {
+  display: block;
+}
+
 .caption {
   margin: 0;
   /* O menu de leitura multiplica o tamanho base do contêiner. */
