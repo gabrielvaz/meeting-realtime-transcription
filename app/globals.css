@@ -323,23 +323,6 @@ body {
   container-type: inline-size;
 }
 
-/* A marca herda a cor do tema; nos temas Cardioline ela assume o laranja da
-   marca, que ali é o token primário. */
-.wordmark {
-  background-color: var(--ink-faint);
-  -webkit-mask-repeat: no-repeat;
-  mask-repeat: no-repeat;
-  -webkit-mask-position: center;
-  mask-position: center;
-  -webkit-mask-size: contain;
-  mask-size: contain;
-}
-
-:root[data-theme="cardioline"] .wordmark,
-:root[data-theme="cardioline-dark"] .wordmark {
-  background-color: var(--primary);
-}
-
 .caption {
   margin: 0;
   /* O menu de leitura multiplica o tamanho base do contêiner. */
